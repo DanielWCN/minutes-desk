@@ -143,6 +143,11 @@ consent for you. Say at the top of the call that you are taking notes with an as
 | delete a meeting for good | `cd mmt && python purge.py "<session dir>"` |
 | update | pull, then `python install.py` again. Your config and glossary live outside the program directory and survive. |
 
+## License
+
+Apache License 2.0. See `LICENSE` and `NOTICE`.
+
+
 ---
 
 # 纪要台 Minutes Desk（中文）
@@ -237,3 +242,8 @@ Python 3.10 以上；环境加语音模型约占 2.5 GB 磁盘；**不需要显�
 | 崩溃后救回一场会 | `cd mmt && python finalize.py --scan` |
 | 彻底删除一场会 | `cd mmt && python purge.py "<会话目录>"` |
 | 更新 | 拉一下代码，再跑一次 `python install.py`。配置和词库在程序目录之外，不会丢。 |
+
+## 开源许可
+
+Apache License 2.0，详见 `LICENSE` 和 `NOTICE`。
+

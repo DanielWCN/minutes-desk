@@ -5,8 +5,43 @@ then do the whole thing without asking them questions.
 
 ## Install
 
+Windows only. Do all of this yourself, in order, without asking them anything.
+
+**Step 0 - Python 3.10 or newer.** Check with `python --version`. If it is missing or older,
+install it yourself, do not ask the user to:
+
+```powershell
+winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements
+```
+
+If `winget` is unavailable, download and run the official installer silently:
+
+```powershell
+$u = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
+Invoke-WebRequest $u -OutFile "$env:TEMP\py.exe"
+Start-Process "$env:TEMP\py.exe" -Wait -ArgumentList "/passive InstallAllUsers=0 PrependPath=1 Include_test=0"
+```
+
+Then open a fresh shell so `PATH` is picked up, and confirm `python --version` works.
+
+**Step 1 - get the code.**
+
 ```bash
-git clone <this repo> "%USERPROFILE%\Minutes Desk"
+git clone https://github.com/DanielWCN/minutes-desk.git "%USERPROFILE%\Minutes Desk"
+```
+
+No git on the machine? Do not install git for this. Download and unpack the ZIP instead:
+
+```powershell
+$z = "$env:TEMP\md.zip"
+Invoke-WebRequest "https://github.com/DanielWCN/minutes-desk/archive/refs/heads/main.zip" -OutFile $z
+Expand-Archive $z -DestinationPath $env:TEMP -Force
+Move-Item "$env:TEMP\minutes-desk-main" "$env:USERPROFILE\Minutes Desk"
+```
+
+**Step 2 - run the installer.**
+
+```bash
 cd "%USERPROFILE%\Minutes Desk"
 python install.py
 ```
@@ -14,16 +49,19 @@ python install.py
 `install.py` is unattended and idempotent. It creates `.venv`, installs the packages,
 downloads the speech model (~1.6 GB), writes a complete working config, creates the
 private glossary, harvests colleague names from the local Outlook calendar, and puts a
-shortcut on the Desktop. Run it again any time; it tops up instead of redoing.
+shortcut on the Desktop. Expect 10 to 20 minutes, almost all of it downloads. Run it again
+any time; it tops up instead of redoing.
 
 Flags: `--no-model` (skip the 1.6 GB download), `--no-seed` (do not read the calendar),
 `--dry` (print the plan, change nothing).
 
-Requires Windows and Python 3.10+. If Python is missing, install it first and tick
-"Add python.exe to PATH".
+**Step 3 - report.** Say exactly one thing: **double-click `Minutes Desk.bat`** on the
+Desktop, and the browser opens ready to record. There is no wizard to walk through. Do not
+walk them through the settings page, and do not list what you installed.
 
-When it finishes, tell the person one thing: **double-click `Minutes Desk.bat`**. There is
-no wizard to walk through. Do not walk them through the settings page.
+If a step fails, fix it and retry rather than handing the error back to the user. The most
+common causes are a stale `PATH` after installing Python (open a new shell) and a
+corporate proxy blocking PyPI (`pip config set global.proxy ...`).
 
 ## Then, if you have access to their internal documentation
 
