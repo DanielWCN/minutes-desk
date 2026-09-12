@@ -1,0 +1,94 @@
+# Instructions for an AI agent installing this tool
+
+If someone asked you to "install Minutes Desk", this file is the contract. Read it once,
+then do the whole thing without asking them questions.
+
+## Install
+
+```bash
+git clone <this repo> "%USERPROFILE%\Minutes Desk"
+cd "%USERPROFILE%\Minutes Desk"
+python install.py
+```
+
+`install.py` is unattended and idempotent. It creates `.venv`, installs the packages,
+downloads the speech model (~1.6 GB), writes a complete working config, creates the
+private glossary, harvests colleague names from the local Outlook calendar, and puts a
+shortcut on the Desktop. Run it again any time; it tops up instead of redoing.
+
+Flags: `--no-model` (skip the 1.6 GB download), `--no-seed` (do not read the calendar),
+`--dry` (print the plan, change nothing).
+
+Requires Windows and Python 3.10+. If Python is missing, install it first and tick
+"Add python.exe to PATH".
+
+When it finishes, tell the person one thing: **double-click `Minutes Desk.bat`**. There is
+no wizard to walk through. Do not walk them through the settings page.
+
+## Then, if you have access to their internal documentation
+
+The single biggest quality lever is the glossary: a speech model that knows a term spells
+it right, and one that does not writes nonsense that then propagates into the minutes.
+So after installing, seed the glossary with the vocabulary of the team this person is on.
+
+Where things go, and this matters:
+
+| table | what belongs there | who may write it |
+|---|---|---|
+| `fix_after` | everything. Canonical spelling -> the wrong forms you expect to see. Applied to finished text, so a mistake here is cosmetic and reversible. | **you** |
+| `hotwords` | a short list, fed to the decoder while it listens. A long list makes recognition measurably WORSE. Hard cap 80, and it is nearly full already. | a human, in the app |
+| `people` | alias -> display name | the tool, from the calendar |
+| `_candidates` | anything you are unsure about; the app shows these for a human to promote | you |
+
+Write only `fix_after` and `_candidates`. Never add to `hotwords`.
+
+Edit this file, creating it if absent:
+
+```
+%LOCALAPPDATA%\MinutesDesk\glossary.user.json
+```
+
+```json
+{
+  "fix_after": {
+    "CanonicalSpelling": ["canonical spelling", "cannonical speling"],
+    "SomeSystem": ["some system", "sum system"]
+  },
+  "_candidates": {
+    "TermYouAreUnsureAbout": {"n": 1, "src": "wiki"}
+  }
+}
+```
+
+Merge into what is already there; do not overwrite the file. `mmt/glossary.base.json` is
+the shipped layer and is replaced on every update - never edit that one.
+
+Rules for what you put in it:
+
+- Team, product, system and metric names. Acronyms the team actually says out loud.
+- **No personal names from documents.** Names come from the person's own calendar, which
+  the tool already reads. Do not harvest names off a wiki, an org chart or a directory.
+- Nothing that only exists behind a login the person may not intend to share. You are
+  reading their documentation with their identity; keep the output to vocabulary.
+- 20 to 60 terms is a good seed. Hundreds is worse than none.
+
+## Do not do these
+
+- Do not set `archive_enabled` to true. Copying meeting audio into someone's cloud drive
+  is their decision and the app asks in place.
+- Do not set `api_ack` to true. That flag records that a human understood a transcript
+  would leave the machine.
+- Do not configure `api_base` / `api_key`. The default engine sends nothing anywhere: it
+  hands the user a prompt to paste into whichever assistant they already use.
+- Do not put anything in the program directory. Everything the user accumulates lives in
+  `%LOCALAPPDATA%\MinutesDesk\` so that replacing the program never wipes it.
+
+## Useful commands
+
+```bash
+cd mmt
+python firstrun.py --reseed     # harvest the calendar again
+python seed.py --dry            # show what a harvest would add, write nothing
+python lexicon.py               # what the merged glossary currently holds
+python doctor.py                # the seven self-checks, as JSON
+```

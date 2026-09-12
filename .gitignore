@@ -1,0 +1,14 @@
+sessions/
+*.wav
+*.pyc
+__pycache__/
+config.json
+
+# private layers - never published
+mmt/glossary.json
+mmt/glossary.json.bak
+mmt/glossary.user.json
+config.json.moved
+.venv/
+.seeded
+assistants.json

@@ -1,0 +1,13 @@
+# What the recorder, the transcriber and the paper need. Nothing else.
+# No web framework (the UI is served by the standard library), no requests/openai
+# (one urllib POST covers every OpenAI-compatible endpoint), no ML stack beyond the
+# speech model's own runtime. First install downloads roughly 400 MB.
+numpy
+soundcard          # WASAPI loopback capture: a copy of what Windows is about to play
+soundfile          # wav in/out
+av                 # optional screen-frame video, and audio muxing
+faster-whisper     # CTranslate2 Whisper; the model itself downloads on first use
+jellyfish          # metaphone, for the "did it mis-hear this?" pass
+rapidfuzz          # fuzzy variant matching in the glossary
+wordfreq           # tells a rare technical term apart from an ordinary word
+Pillow             # frame thumbnails in the paper

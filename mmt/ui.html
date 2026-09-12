@@ -1,0 +1,3223 @@
+<!doctype html><html lang="zh"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>纪要台 · Minutes Desk</title>
+<!-- Theme before first paint, so switching does not flash the other palette. -->
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('mmt.theme')||'dark';}
+catch(e){document.documentElement.dataset.theme='dark';}</script>
+<style>
+:root{
+  /* One near-black family, one accent, four states. Every grey below is measured
+     against the surface it sits on: --faint is 6.7:1 on --bg and 5.8:1 on --pane-3,
+     so a quiet label is still a readable label. */
+  --bg:#08090a;          /* app surface */
+  --pane:#0f1011;        /* panel body */
+  --pane-2:#141516;      /* panel head, inset rows */
+  --pane-3:#191a1b;      /* hover / control face */
+  --line:rgba(255,255,255,.07);   /* panel border */
+  --hair:rgba(255,255,255,.045);  /* row divider */
+  --text:#f7f8f8; --dim:#d0d6e0; --faint:#9096a0;
+  --primary:#5e6ad2; --primary-hi:#7170ff; --primary-lo:#4c56b8;
+  --acc:#5ac8fa; --acc-soft:rgba(94,106,210,.16);
+  /* every state has exactly one text tint, so a status word is the same colour
+     wherever it appears - in a lamp, in a chip, in a stage, in a message */
+  --ok-t:#7ee2a0; --warn-t:#f6d97a; --bad-t:#f4a0a0; --info-t:#9ad8fb;
+  --link:#9db4ff; --link-hi:#c3ccff; --on-acc:#0b1020;
+  --edge:rgba(255,255,255,.14);
+  --ok:#27a644; --warn:#f2c94c; --bad:#eb5757; --info:#5ac8fa;
+  --ok-dim:rgba(39,166,68,.15); --warn-dim:rgba(242,201,76,.15);
+  --bad-dim:rgba(235,87,87,.15); --info-dim:rgba(90,200,250,.15);
+  --pane-4:#22252a;
+  --r:6px; --r-lg:10px;
+  --sans:"Segoe UI Variable Text","Segoe UI","Microsoft YaHei",
+         -apple-system,sans-serif;
+  --mono:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  --h-top:38px; --h-bot:0px;
+  --w-ses:200px; --w-doc:416px;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 var(--sans);
+  -webkit-font-smoothing:antialiased;overflow:hidden}
+a{color:var(--link);text-decoration:none}
+a:hover{color:var(--link-hi)}
+::selection{background:var(--primary);color:#fff}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.13);border-radius:5px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--edge)}
+
+/* ============================================================ title bar
+   A tool tells you its state before you ask. The rack of lamps is the whole
+   environment check compressed into one glance: all green, start recording. */
+.hdr{height:var(--h-top);background:var(--pane-2);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:16px;padding:0 12px;position:relative;z-index:5}
+.hdr .in{display:flex;align-items:center;gap:16px;width:100%}
+.logo{flex:none;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;
+  letter-spacing:.01em;white-space:nowrap}
+.logo b{width:22px;height:22px;border-radius:var(--r);background:var(--primary);
+  color:#fff;font:600 10px/22px var(--mono);text-align:center;letter-spacing:.02em}
+.logo i{font-style:normal;font-size:11px;color:var(--faint);font-weight:400;
+  padding-left:2px;border-left:1px solid var(--line);margin-left:2px;padding-left:8px}
+.hdr .rt{display:flex;align-items:center;gap:6px;margin-left:auto}
+
+/* one icon system: stroke-only glyphs, sized here, coloured by the button they sit in */
+.sprite{display:none}
+.ic{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;vertical-align:middle;pointer-events:none}
+.ic.sm{width:13px;height:13px}
+.btn.ib{padding:0 8px;gap:6px;background:none;border-color:transparent;color:var(--dim)}
+.btn.ib:hover{background:var(--pane-3);border-color:var(--line);color:var(--text)}
+.btn.ib .ct{font:11px/1 var(--mono);font-style:normal;color:var(--faint)}
+.btn.ib:hover .ct{color:var(--dim)}
+
+/* appearance is a switch, not a word: sun on the left, moon on the right */
+.thsw{display:flex;align-items:center;gap:5px;height:24px;padding:0 6px;cursor:pointer;
+  border:1px solid var(--line);border-radius:999px;background:var(--pane-2);color:var(--faint)}
+.thsw:hover{border-color:var(--edge)}
+.thsw .tr{width:24px;height:13px;flex:none;position:relative;border-radius:999px;
+  background:var(--pane-3);border:1px solid var(--line)}
+.thsw .tr i{position:absolute;top:1px;left:1px;width:9px;height:9px;border-radius:50%;
+  background:var(--acc);transform:translateX(11px);
+  transition:transform .16s ease,background .16s ease}
+.thsw.lt .tr i{transform:translateX(0);background:var(--warn)}
+.thsw.lt .ic.s{color:var(--warn)}
+.lgsw b{font:600 9.5px/1 var(--sans);color:var(--faint);letter-spacing:.02em}
+.lgsw:not(.en) .tr i{transform:translateX(0)}
+.lgsw .tr i{background:var(--primary-hi)}
+.lgsw:not(.en) b:first-of-type,.lgsw.en b:last-of-type{color:var(--text)}
+.thsw:not(.lt) .ic.m{color:var(--acc)}
+/* <s> is used all over as "the quiet half of a label"; it must never look deleted */
+s{text-decoration:none}
+
+/* the rack of lamps: every check, in the title bar, always on screen */
+.rack{display:flex;align-items:center;gap:1px;padding:2px;min-width:0;overflow:hidden;
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r)}
+
+/* the lamp itself: a lit LED, not a coloured square */
+.led{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.16);flex:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.led.ok{background:var(--ok);box-shadow:0 0 0 2px var(--ok-dim),0 0 7px rgba(16,185,129,.75)}
+.led.warn{background:var(--warn);box-shadow:0 0 0 2px var(--warn-dim),0 0 7px rgba(245,158,11,.75)}
+.led.fail{background:var(--bad);box-shadow:0 0 0 2px var(--bad-dim),0 0 7px rgba(239,68,68,.8);
+  animation:blink 1.4s steps(1) infinite}
+.led.todo{background:rgba(255,255,255,.24);box-shadow:0 0 0 2px rgba(255,255,255,.05)}
+.led.busy{background:var(--info);box-shadow:0 0 0 2px var(--info-dim),0 0 7px rgba(56,189,248,.8);
+  animation:pulse 1.1s ease-in-out infinite}
+@keyframes blink{50%{opacity:.25}}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.led{animation:none!important}}
+
+/* ============================================================ shell */
+.lay{display:flex;height:calc(100vh - var(--h-top) - var(--h-bot))}
+
+main{flex:1;min-width:0;overflow-y:auto;padding:10px 12px 40px;
+  display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+
+/* ============================================================ panels */
+.card{background:var(--pane);border:1px solid var(--line);border-radius:var(--r-lg);
+  scroll-margin-top:8px}
+.card.now{border-color:var(--primary)}
+.card.off{opacity:.55}
+.hd{height:34px;display:flex;align-items:center;gap:8px;padding:0 8px 0 10px;
+  background:var(--pane-2);border-bottom:1px solid var(--line);
+  border-radius:var(--r-lg) var(--r-lg) 0 0}
+.hd .no{width:17px;height:17px;flex:none;border-radius:3px;background:var(--pane-3);
+  color:var(--faint);font:600 10px/17px var(--mono);text-align:center}
+.card.now .hd .no{background:var(--primary);color:#fff}
+.hd h2{margin:0;font-size:13px;font-weight:600;letter-spacing:.01em}
+.hd .ex{margin-left:auto;display:flex;align-items:center;gap:8px;min-width:0}
+.hd .sub{font-size:12px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.bd{padding:10px}
+.bd.flush{padding:0}
+.divider{height:1px;background:var(--hair);margin:12px 0}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.f1{flex:1}
+.big{font:600 22px/1 var(--mono);letter-spacing:.02em}
+
+/* ============================================================ lamps
+   Seven checks, seven lamps, one row in the title bar. Green across = go. A lamp is a
+   button onto its own detail, which drops down from the lamp itself. */
+.lamp{display:flex;align-items:center;gap:6px;padding:3px 9px 3px 7px;border:none;
+  border-radius:2px;background:none;cursor:pointer;font:12px/1 var(--sans);
+  color:var(--dim);white-space:nowrap;font-family:var(--sans)}
+.lamp:hover{background:var(--pane-3);color:var(--text)}
+.lamp.fail{color:var(--bad-t)}
+.lamp.warn{color:var(--warn-t)}
+.lamp.at{background:var(--primary);color:#fff}
+.lamp.at:hover{background:var(--primary-hi);color:#fff}
+.gsep{width:1px;height:16px;background:var(--line);margin:0 3px;flex:none}
+/* Seven lamps stay on screen. A narrower window drops the labels first - the LEDs and
+   the summary chip in the corner still say it - and only when even the LEDs would push
+   the logo off does the rack give way to the chip. */
+@media (max-width:920px){.rack{display:none}}
+
+/* the version-mismatch bar: the one message that outranks everything else on screen */
+.oldb{padding:10px 16px;font-size:12.5px;line-height:1.65;color:var(--text);
+  background:var(--bad-dim);border-bottom:1px solid rgba(239,68,68,.38)}
+.oldb b{color:var(--bad)}
+
+/* the document itself, full height, inside the tool instead of a second window */
+.docf{display:block;width:100%;height:calc(100vh - 236px);min-height:440px;
+  border:1px solid var(--line);border-radius:var(--r);background:#fff}
+
+/* ============================================================ verdict / alert */
+.alert{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border-radius:var(--r);
+  background:var(--ok-dim);border:1px solid rgba(16,185,129,.32);margin:0 0 8px}
+.alert.warn{background:var(--warn-dim);border-color:rgba(245,158,11,.32)}
+.alert.fail{background:var(--bad-dim);border-color:rgba(239,68,68,.32)}
+.alert.todo,.alert.busy{background:var(--info-dim);border-color:rgba(56,189,248,.28)}
+.alert .ai{width:17px;height:17px;flex:none;border-radius:50%;background:var(--ok);
+  color:var(--on-acc);font:700 11px/17px var(--sans);text-align:center}
+.alert.warn .ai{background:var(--warn);color:var(--on-acc)}
+.alert.fail .ai{background:var(--bad);color:var(--on-acc)}
+.alert.todo .ai,.alert.busy .ai{background:var(--info);color:var(--on-acc)}
+.alert .at{min-width:0}
+.alert h3{margin:0;font-size:13px;font-weight:600}
+.alert p{margin:2px 0 0;font-size:12px;color:var(--dim);line-height:1.5}
+
+/* ============================================================ collapse */
+.cl{border:1px solid var(--line);border-radius:var(--r);margin-top:8px;overflow:hidden}
+.clh{height:30px;display:flex;align-items:center;gap:7px;padding:0 9px;cursor:pointer;
+  font-size:12px;font-weight:500;color:var(--dim);background:var(--pane-2);user-select:none}
+.clh:hover{color:var(--text);background:var(--pane-3)}
+/* say out loud that the panel closes again, at the end of the row where the eye
+   lands after reading the summary */
+.clh:after{content:"\5c55\5f00";font:11px/1 var(--mono);color:var(--faint);
+  margin-left:8px;flex:none}
+.cl.op .clh:after{content:"\6536\8d77"}
+.clh .ar{font-size:8px;color:var(--faint);transition:transform .18s;display:inline-block}
+.cl.op .clh{border-bottom:1px solid var(--line)}
+.cl.op .clh .ar{transform:rotate(90deg)}
+.clh .ex{margin-left:auto;display:flex;gap:8px;align-items:center}
+.clb{display:none}
+.cl.op .clb{display:block}
+
+/* ============================================================ check table */
+.tbl{font-size:13px}
+.tbl .th,.tbl .tr{display:grid;grid-template-columns:20px minmax(140px,1.1fr) 2fr 108px;
+  gap:8px;align-items:start;padding:6px 10px}
+.tbl .th{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);
+  background:var(--pane-2);border-bottom:1px solid var(--line)}
+.tbl .gr{display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--bg);
+  border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);
+  font:600 11px/1 var(--sans);letter-spacing:.03em;color:var(--dim)}
+.tbl .gr span:last-child{margin-left:auto;font-weight:400;color:var(--faint);
+  font-family:var(--mono);font-size:11px}
+.tbl .tr{border-bottom:1px solid var(--hair)}
+.tbl .tr:last-child{border-bottom:none}
+.tbl .ic{font:11px/1.45 var(--sans);text-align:center;color:var(--faint)}
+.tbl .tr.ok .ic{color:var(--ok)}.tbl .tr.warn .ic{color:var(--warn)}
+.tbl .tr.fail .ic{color:var(--bad)}
+.tbl .nm{font-weight:500}
+.tbl .vl{color:var(--dim);font-size:12px;line-height:1.5;word-break:break-word}
+.tbl .vl em{font-style:normal;color:var(--faint);padding-left:6px}
+.tbl .ac{text-align:right;display:flex;gap:6px;justify-content:flex-end;align-items:center;
+  flex-wrap:wrap}
+.tbl .kv,.tbl .ex2{grid-column:2/5;font-size:12px;color:var(--faint);line-height:1.6}
+.tbl .kv i{font-style:normal;color:var(--dim);display:inline-block;min-width:76px}
+.tbl .ex2{padding-top:6px;display:flex;flex-direction:column;gap:7px;align-items:flex-start}
+.tbl .why{color:var(--dim);font-size:12px;line-height:1.55}
+
+/* ============================================================ controls */
+.btn{font:500 12px/1 var(--sans);padding:0 11px;height:26px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--pane-3);color:var(--text);cursor:pointer;
+  white-space:nowrap;display:inline-flex;align-items:center;gap:6px;transition:.12s}
+.btn:hover{background:var(--pane-3);border-color:var(--edge)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+.btn.pri{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.pri:hover{background:var(--primary-hi);border-color:var(--primary-hi)}
+.btn.dgr{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.dgr:hover{background:#d94848}
+.btn.lg{height:32px;padding:0 16px;font-size:13px}
+.btn.sm{height:22px;padding:0 8px;font-size:11px}
+.btn.txt{background:none;border-color:transparent;color:var(--dim);padding:0 6px}
+.btn.txt:hover{background:var(--pane-3);color:var(--text)}
+.btn.txt.q{color:var(--info)}
+.tag{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;
+  border-radius:3px;font:500 11px/1 var(--sans);background:var(--pane-3);color:var(--dim);
+  border:1px solid var(--line);white-space:nowrap}
+.tag.green{color:var(--ok-t);background:var(--ok-dim);border-color:rgba(16,185,129,.35)}
+.tag.gold{color:var(--warn-t);background:var(--warn-dim);border-color:rgba(245,158,11,.35)}
+.tag.red{color:var(--bad-t);background:var(--bad-dim);border-color:rgba(239,68,68,.35)}
+.tag.blue{color:var(--info-t);background:var(--info-dim);border-color:rgba(56,189,248,.35)}
+
+.form,.g2,.g3{display:grid;gap:10px 12px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.fitem{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fitem label{font-size:12px;color:var(--dim);display:flex;gap:6px;align-items:baseline}
+.fitem label i{font-style:normal;font-size:11px;color:var(--faint)}
+input[type=text],select{height:28px;padding:0 8px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--bg);color:var(--text);
+  font:13px var(--sans);min-width:0;transition:.12s}
+input[type=text]:hover,select:hover{border-color:var(--edge)}
+input[type=text]:focus,select:focus{outline:none;border-color:var(--primary-hi);
+  box-shadow:0 0 0 2px rgba(22,104,196,.22)}
+input[type=checkbox]{width:14px;height:14px;accent-color:var(--primary-hi);margin:0}
+.chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);cursor:pointer}
+.chk em{font-style:normal;color:var(--faint);font-size:11px;margin-left:4px}
+.msg{font-size:12px;color:var(--faint)}
+.msg.err{color:var(--bad-t)}
+.note{font-size:12px;color:var(--faint);line-height:1.6;background:var(--pane-2);
+  border:1px solid var(--line);border-left:2px solid var(--warn);
+  border-radius:0 var(--r) var(--r) 0;padding:8px 10px}
+.empty{padding:14px 10px;color:var(--faint);font-size:12px;line-height:1.6}
+.empty b{display:block;font-weight:600;font-size:13px;color:var(--dim);margin-bottom:2px}
+
+/* ============================================================ live meters */
+.mtr{display:grid;grid-template-columns:96px 1fr 150px;gap:9px;align-items:center;
+  padding:6px 0;font-size:12px}
+.mtr .lb{color:var(--dim)}
+.mtr .num{font:12px var(--mono);color:var(--faint);text-align:right}
+.trk{height:6px;border-radius:3px;background:var(--bg);overflow:hidden;
+  box-shadow:inset 0 0 0 1px var(--line)}
+.trk div{height:100%;background:linear-gradient(90deg,var(--ok),var(--ok-t));transition:width .18s}
+.trk.low div{background:linear-gradient(90deg,var(--warn),var(--warn-t))}
+.trk.hot div{background:linear-gradient(90deg,var(--bad),var(--bad-t))}
+
+/* ============================================================ session list
+   A row is a record with one primary action. Artefacts are chips, not links in a
+   sentence, so the eye can count them. */
+.fl{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.fl a{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;
+  border:1px solid var(--line);border-radius:3px;background:var(--pane-2);
+  color:var(--link);text-decoration:none;font-size:11px;white-space:nowrap}
+.fl a:hover{border-color:var(--primary-hi);background:var(--pane-3);color:var(--link-hi)}
+.fl a s{text-decoration:none;color:var(--faint);font:10px var(--mono)}
+.out .sub{font-size:11px;color:var(--faint)}
+.pth{margin-top:8px;font:11px var(--mono);color:var(--faint);word-break:break-all}
+.log{margin:0;padding:8px 10px;background:#000;border:1px solid var(--line);
+  border-radius:var(--r);font:11.5px/1.55 var(--mono);color:var(--dim);
+  max-height:200px;overflow:auto;white-space:pre-wrap}
+.fs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.fs img{width:100%;border:1px solid var(--line);border-radius:var(--r)}
+
+/* ============================================================ status bar
+   Standing facts live here, the way a real tool keeps them: always on screen,
+   never in the way. */
+/* ============================================================ light theme
+   Same geometry, light surfaces. Dark is the default because a recording tool
+   belongs in the dark chrome family, but a tool has to be readable in a bright
+   room too, so the palette is one switch in the title bar and it is remembered.
+   Only the tokens move; no layout rule is duplicated. */
+:root[data-theme=light]{
+  /* Four surfaces, not one. #fff on #f7f7f8 is the same colour to the eye, which is
+     how the light theme turned into one white field with text floating in it. The
+     canvas is now a real grey, panels are white on top of it, and every border is
+     dark enough to be a border. */
+  --bg:#e8ebf0;--pane:#ffffff;--pane-2:#f5f6f9;--pane-3:#e6e9ef;--pane-4:#d8dde5;
+  --line:rgba(16,24,40,.14);--hair:rgba(16,24,40,.08);
+  --text:#101828;--dim:#475467;--faint:#667085;
+  --primary:#5158c9;--primary-hi:#4349b8;--primary-lo:#3a3fa0;
+  --acc:#0369a1;--acc-soft:rgba(81,88,201,.10);
+  --ok-t:#046048;--warn-t:#8a5406;--bad-t:#a31f1f;--info-t:#075985;
+  --link:#3a41ab;--link-hi:#262c86;--on-acc:#ffffff;
+  --edge:rgba(0,0,0,.18);
+  --ok:#047857;--warn:#a16207;--bad:#c62828;--info:#0369a1;
+  --ok-dim:rgba(4,120,87,.10);--warn-dim:rgba(161,98,7,.10);
+  --bad-dim:rgba(198,40,40,.09);--info-dim:rgba(3,105,161,.09);
+  --sh:0 1px 2px rgba(16,24,40,.07),0 8px 24px rgba(16,24,40,.10);
+}
+[data-theme=light] a{color:var(--link)}
+[data-theme=light] a:hover{color:var(--link-hi)}
+[data-theme=light] ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.16)}
+[data-theme=light] ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.26)}
+/* an LED on white needs a ring, not a halo */
+[data-theme=light] .led{background:rgba(0,0,0,.2);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+[data-theme=light] .led.ok{background:var(--ok);box-shadow:0 0 0 2px rgba(5,150,105,.16)}
+[data-theme=light] .led.warn{background:var(--warn);box-shadow:0 0 0 2px rgba(180,83,9,.16)}
+[data-theme=light] .led.fail{background:var(--bad);box-shadow:0 0 0 2px rgba(220,38,38,.16)}
+[data-theme=light] .led.busy{background:var(--info);box-shadow:0 0 0 2px rgba(2,132,199,.16)}
+[data-theme=light] .led.todo{background:rgba(0,0,0,.32);box-shadow:0 0 0 2px rgba(0,0,0,.05)}
+[data-theme=light] .lamp:hover{border-color:var(--edge)}
+[data-theme=light] .card.now{border-color:var(--primary)}
+[data-theme=light] .btn:hover{background:var(--pane-3);border-color:var(--edge)}
+[data-theme=light] .alert{border-color:rgba(5,150,105,.26)}
+[data-theme=light] .alert.warn{border-color:rgba(180,83,9,.26)}
+[data-theme=light] .alert.fail{border-color:rgba(220,38,38,.26)}
+[data-theme=light] .alert.todo,[data-theme=light] .alert.busy{border-color:rgba(2,132,199,.26)}
+[data-theme=light] .alert .ai{color:#fff}
+[data-theme=light] input[type=text]:hover,[data-theme=light] select:hover{border-color:var(--edge)}
+[data-theme=light] .fl a{color:var(--link)}
+[data-theme=light] .fl a:hover{color:var(--link-hi)}
+[data-theme=light] .log{background:#15161a;color:#e2e4e9;border-color:var(--line)}
+/* ============================================================ popover
+   A lamp is a switch, and what it opens comes down from the lamp itself: the detail
+   hangs under the thing you clicked, so nothing in the workspace has to move aside
+   for it and the panel closes the same way it opened. */
+.pop{position:fixed;z-index:40;display:none;min-width:320px;max-width:430px;
+  background:var(--pane);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:0 14px 36px rgba(0,0,0,.55)}
+.pop.wide{min-width:min(760px,calc(100vw - 24px));max-width:min(880px,calc(100vw - 24px))}
+.pop.on{display:block}
+.pop:before{content:"";position:absolute;top:-5px;left:var(--ax,20px);width:8px;height:8px;
+  background:var(--pane);border-left:1px solid var(--line);border-top:1px solid var(--line);
+  transform:rotate(45deg)}
+.pop .ph{display:flex;align-items:center;gap:8px;padding:9px 11px;
+  border-bottom:1px solid var(--hair)}
+.pop .ph b{font-size:13px;font-weight:600}
+.pop .pb{padding:10px 11px;font-size:12px;color:var(--dim);line-height:1.6;
+  display:flex;flex-direction:column;gap:9px;max-height:min(56vh,460px);overflow:auto}
+.pop .pb.p0{padding:0;display:block}
+.pop .pv{font:12px/1.5 var(--mono);color:var(--text);word-break:break-word}
+.pop .pv em{font-style:normal;color:var(--faint);padding-left:6px;font-family:var(--sans)}
+.pop .why{color:var(--dim);line-height:1.55}
+.pop .kv i{font-style:normal;color:var(--faint);display:inline-block;min-width:78px}
+.pop .pf{display:flex;gap:6px;align-items:center;padding:8px 11px;
+  border-top:1px solid var(--hair);background:var(--pane-2);
+  border-radius:0 0 var(--r-lg) var(--r-lg)}
+.pop .pf .sub{font-size:11px;color:var(--faint)}
+[data-theme=light] .pop{box-shadow:0 14px 34px rgba(15,23,42,.16)}
+.tag.act{cursor:pointer}
+.tag.act:hover{border-color:var(--edge);color:var(--text)}
+
+/* ============================================================ views
+   Three places, one at a time: the meeting you are in, the ones you have had, and
+   the settings. Nothing that belongs to a past meeting is on screen while you are
+   preparing the next one. */
+
+/* ============================================================ attendees
+   Pasted text is the input people actually have: a To: line out of the invite. It is
+   parsed in front of them and shown as chips, so a wrong split is visible and
+   removable instead of quietly ending up in the minutes. */
+textarea{width:100%;padding:6px 8px;border-radius:var(--r);border:1px solid var(--line);
+  background:var(--bg);color:var(--text);font:13px/1.5 var(--sans);resize:vertical;
+  min-height:50px;transition:.12s}
+textarea:hover{border-color:var(--edge)}
+textarea:focus{outline:none;border-color:var(--primary-hi);
+  box-shadow:0 0 0 2px rgba(22,104,196,.22)}
+.chips{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:7px}
+.chips:empty{display:none}   /* no names yet, no reserved hole under the box */
+
+/* the calendar date only matters once the calendar is open, so it hides until then */
+.dpick{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--faint)}
+.dpick input{width:136px}
+
+/* Analysis is the one heavy, irreversible-feeling action on this card. It never looks
+   like the buttons around it, even when it is a re-run. */
+.btn.ana{border-color:var(--primary-hi);color:var(--primary-hi);font-weight:600}
+.btn.ana:hover{background:var(--primary);color:#fff;border-color:var(--primary-hi)}
+[data-theme=light] .btn.ana{color:var(--primary-hi);border-color:var(--primary)}
+.chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 3px 0 8px;
+  border-radius:11px;background:var(--pane-3);border:1px solid var(--line);
+  font-size:11.5px;color:var(--text);white-space:nowrap}
+.chip x{cursor:pointer;color:var(--faint);width:16px;height:16px;border-radius:50%;
+  text-align:center;font:12px/16px var(--sans)}
+.chip x:hover{background:var(--bad);color:#fff}
+.chips .n{font-size:11px;color:var(--faint);margin-left:2px}
+
+/* Outlook picker: the calendar this machine is already signed in to. */
+.ol{display:none;border:1px solid var(--line);border-radius:var(--r);margin-top:8px;
+  max-height:236px;overflow:auto;background:var(--pane-2)}
+.ol.on{display:block}
+.oi{display:grid;grid-template-columns:104px 1fr auto;gap:10px;padding:7px 10px;
+  border-bottom:1px solid var(--hair);cursor:pointer;font-size:12px;align-items:center}
+.oi:last-child{border-bottom:none}
+.oi:hover{background:var(--pane-3)}
+.oi.now{background:var(--info-dim)}
+.oi b{font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.oi .tm{font:12px var(--mono);color:var(--dim)}
+.oi .n{font-size:11px;color:var(--faint);white-space:nowrap}
+.oi.err{grid-template-columns:1fr;color:var(--bad-t);cursor:default;line-height:1.6}
+
+/* ============================================================ result
+   After stop, the meeting is on this screen: what was captured, how big it is, and
+   the one button that turns it into a document. */
+.kvs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 18px;
+  font-size:12px}
+.kvs div{display:flex;gap:9px;padding:5px 0;border-bottom:1px solid var(--hair);
+  min-width:0}
+.kvs i{font-style:normal;color:var(--faint);min-width:52px;flex:none}
+.kvs b{font-weight:500;color:var(--text);word-break:break-word}
+.sect{font:600 10px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--faint);margin:14px 0 7px}
+
+/* the four stages of one meeting, always visible, so "is it done?" is never a guess */
+.stp{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.stp b{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;
+  border-radius:12px;border:1px solid var(--line);background:var(--pane-2);
+  font:500 11.5px/1 var(--sans);color:var(--faint)}
+.stp b i{font-style:normal;font-size:10px;color:var(--faint)}
+.stp b.done{color:var(--ok-t);background:var(--ok-dim);border-color:rgba(16,185,129,.35)}
+.stp b.done i,.stp b.now i{color:inherit;opacity:.75}
+.stp b.now{color:var(--info-t);background:var(--info-dim);border-color:rgba(56,189,248,.35)}
+.stp b.fail{color:var(--bad-t);background:var(--bad-dim);border-color:rgba(239,68,68,.35)}
+.stp s{text-decoration:none;color:var(--faint);opacity:.6}
+/* while a job runs, the stage it is in breathes: the chips are the progress display */
+.stp.run b.now{animation:beat 1.25s ease-in-out infinite}
+@keyframes beat{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* Progress belongs beside the four stage chips, because the chips are what it reports
+   on. At the foot of the page it was a log nobody could relate to the state above. */
+.prog{margin:0 0 14px;padding:9px 11px;border:1px solid rgba(56,189,248,.3);
+  border-radius:var(--r);background:var(--info-dim)}
+.prog .ph{display:flex;align-items:center;gap:8px;font-size:12.5px;min-width:0}
+.prog .ph b{font-weight:600;flex:none}
+.prog .ph i{font-style:normal;color:var(--dim);min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.prog .ph em{font-style:normal;font:11.5px var(--mono);color:var(--faint);flex:none}
+.prog .ph .f1{flex:1}
+.prog .pb{margin-top:8px;height:3px;border-radius:3px;background:rgba(0,0,0,.25);
+  overflow:hidden}
+.prog .pb i{display:block;height:100%;width:34%;border-radius:3px;background:var(--acc);
+  animation:crawl 1.6s ease-in-out infinite}
+@keyframes crawl{0%{transform:translateX(-100%)}100%{transform:translateX(294%)}}
+.prog .log{margin-top:8px;max-height:190px;overflow:auto}
+.spin{flex:none;width:11px;height:11px;border-radius:50%;border:2px solid rgba(0,0,0,.3);
+  border-top-color:var(--acc);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+[data-theme=light] .prog{background:var(--info-dim);border-color:var(--info)}
+
+/* confirm: every question the machine cannot answer, answered here and nowhere else */
+.qz{display:flex;flex-direction:column;gap:7px}
+/* The decision reads as a substitution - heard form, arrow, target form - so the two
+   spellings sit side by side and the buttons no longer have to repeat them. */
+.qi{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;
+  padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--pane-2);font-size:12px}
+.qi.yes{border-color:rgba(16,185,129,.4)}
+.qi.cust{border-color:rgba(245,158,11,.4)}
+.qi.no{border-color:var(--edge)}
+.qi .q{min-width:0}
+.qi .qh{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.qi .qh code{font:600 12.5px var(--mono);color:var(--dim);padding:1px 6px;border-radius:3px;
+  background:var(--pane-3);border:1px solid var(--line)}
+.qi .qh code.to{color:var(--info-t);border-color:rgba(56,189,248,.35);background:var(--info-dim)}
+.qi.yes .qh code.to{color:var(--ok-t);border-color:rgba(16,185,129,.35);background:var(--ok-dim)}
+.qi.no .qh code.to{opacity:.4;text-decoration:line-through}
+.qi.cust .qh code.to{color:var(--warn-t);border-color:rgba(245,158,11,.35);
+  background:var(--warn-dim)}
+.qi .qh s{text-decoration:none;color:var(--faint);font-size:13px}
+.qi .qh .n{color:var(--faint);font:10.5px var(--mono)}
+.qi .qh .stt{font-size:10.5px;padding:1px 6px;border-radius:9px;border:1px solid var(--line);
+  color:var(--faint)}
+.qi.yes .qh .stt{color:var(--ok-t);border-color:rgba(16,185,129,.35)}
+.qi.no .qh .stt{color:var(--dim);border-color:var(--edge)}
+.qi.cust .qh .stt{color:var(--warn-t);border-color:rgba(245,158,11,.35)}
+.qi mark s{text-decoration:line-through;opacity:.55;margin-right:4px;font-weight:400}
+.qi mark.yes{background:var(--ok-dim);color:var(--ok-t);box-shadow:inset 0 0 0 1px rgba(16,185,129,.4)}
+.qi mark.cust{background:var(--warn-dim);color:var(--warn-t);box-shadow:inset 0 0 0 1px rgba(245,158,11,.4)}
+.qi mark.no{background:none;color:var(--dim);box-shadow:inset 0 0 0 1px var(--edge)}
+.qi mark{background:rgba(56,189,248,.22);color:var(--text);border-radius:3px;padding:0 2px;
+  font-weight:600}
+[data-theme=light] .qi mark{background:rgba(56,189,248,.3);color:var(--text)}
+/* the sentence it was heard in, and on request the turns around it: one clipped
+   fragment is not enough to remember what was being said */
+.qi .ctx{margin:6px 0 0;color:var(--dim);font-size:11.5px;line-height:1.6}
+.qi .ctx .cl{display:flex;gap:8px;padding:1px 0}
+.qi .ctx .cl u{flex:none;text-decoration:none;color:var(--faint);font:10.5px/1.7 var(--mono);
+  min-width:74px}
+.qi .ctx .cl.o{opacity:.55}
+.qi .ctx .cl.h{color:var(--text)}
+.qi .ctx .one{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden}
+.qi .ctx .sep{margin:5px 0 2px;border-top:1px dashed var(--line);padding-top:4px;
+  color:var(--faint);font:10.5px var(--mono)}
+.qi .more{margin-top:4px;padding-left:0}
+.sw{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;
+  flex:none}
+.sw button{background:var(--pane-3);border:none;color:var(--dim);font:12px var(--sans);
+  white-space:nowrap;
+  padding:5px 11px;cursor:pointer}
+.sw button+button{border-left:1px solid var(--line)}
+.sw button.on{background:var(--acc);color:var(--on-acc);font-weight:600}
+.sw button.on.x{background:var(--bad);color:#fff}
+.sw button.o3{color:var(--faint)}
+.sw button.o3.on{background:var(--warn);color:var(--on-acc);font-weight:600}
+/* neither offered spelling was right: type the one that was */
+.qc{display:flex;gap:6px;align-items:center;flex:none}
+.qc input{width:170px;background:var(--pane);border:1px solid var(--acc);color:var(--text);
+  border-radius:var(--r);padding:5px 8px;font:12px var(--mono)}
+
+/* ============================================================ the confirm desk
+   Everything a person has to decide about a recording sits in one panel on this page,
+   in numbered groups, and nothing is written until the person says so. */
+.grp{display:flex;align-items:center;gap:9px;margin:20px 0 9px}
+.grp u{flex:none;width:19px;height:19px;border-radius:50%;background:var(--pane-3);
+  color:var(--dim);font:600 11px/19px var(--mono);text-align:center;text-decoration:none}
+.grp h4{margin:0;font-size:13px;font-weight:600;color:var(--text)}
+.grp i{font-style:normal;font-size:11.5px;color:var(--faint)}
+.grp .f1{flex:1}
+.grp .tag{flex:none}
+
+/* who was in the room: one tick box per invited name */
+.att{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:2px 14px}
+.att>.sub{grid-column:1/-1}
+.att label{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:var(--r);
+  cursor:pointer;font-size:12.5px;color:var(--dim);border:1px solid transparent}
+.att label:hover{background:var(--pane-2)}
+.att label.on{color:var(--text);border-color:rgba(56,189,248,.28);background:var(--info-dim)}
+.att input{accent-color:var(--primary);width:14px;height:14px;flex:none}
+.att label s{text-decoration:none;color:var(--faint);font:10px var(--mono);margin-left:auto}
+/* the tick and the spelling are two different decisions, so they are two controls */
+.att .ar{display:flex;align-items:center;gap:2px;min-width:0}
+.att .ar>label{flex:1;min-width:0}
+.att .ar>label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att .ed{flex:none;font-size:10.5px;color:var(--faint);cursor:pointer;padding:3px 6px;
+  border-radius:5px}
+.att .ed:hover{background:var(--pane-3);color:var(--text)}
+.att .ae{display:flex;gap:5px;align-items:center;min-width:0}
+.att .ae input[type=text]{flex:1;min-width:0;width:auto;height:30px;font-size:12.5px}
+
+/* the open questions the machine found: each one gets a tick, or it stays visible */
+.iz{display:flex;flex-direction:column;gap:6px}
+.ii{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:9px 11px;
+  border:1px solid var(--hair);border-radius:var(--r);background:var(--pane-2)}
+.ii.warn{border-color:rgba(180,83,9,.34)}
+.ii.on{opacity:.55}
+.ii input{accent-color:var(--primary);width:15px;height:15px;margin-top:2px;flex:none;
+  cursor:pointer}
+.ii b{display:block;font-size:12.5px;font-weight:600;color:var(--text)}
+.ii p{margin:3px 0 0;font-size:11.5px;line-height:1.55;color:var(--faint)}
+.ii .lv{font:600 9px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);margin-left:6px}
+.ii.warn .lv{color:var(--warn)}
+/* every notice says whether it wants an action, because "for your information" is not
+   obvious from a checkbox */
+.ii .act{display:block;margin-top:4px;font-size:11.5px;color:var(--dim)}
+.tr .nm em{display:block;font-style:normal;font-size:11px;color:var(--faint);
+  margin-top:2px;line-height:1.5}
+.ii.warn .act{color:var(--warn-t)}
+
+/* the document, on this page. Opening a second window is a choice, not the only way. */
+.prev{margin-top:10px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
+  background:#fff}
+.prev iframe{display:block;width:100%;height:560px;border:0;background:#fff}
+.prev .bar{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--pane-2);
+  border-bottom:1px solid var(--line);font-size:11.5px;color:var(--faint)}
+.outs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px}
+.outc{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--pane-2)}
+.outc u{flex:none;width:26px;height:26px;border-radius:var(--r);background:var(--pane-3);
+  color:var(--dim);font:600 11px/26px var(--mono);text-align:center;text-decoration:none}
+.outc b{display:block;font-size:12.5px;color:var(--text)}
+.outc i{font-style:normal;font-size:11px;color:var(--faint)}
+.outc .f1{flex:1}
+
+/* the files themselves are evidence, not the product: folded away by default */
+.fold{margin-top:16px;border-top:1px solid var(--hair);padding-top:10px}
+.fold>summary{cursor:pointer;font-size:11.5px;color:var(--faint);list-style:none;
+  display:flex;align-items:center;gap:6px}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary:before{content:'\25B8';font-size:9px;color:var(--faint)}
+.fold[open]>summary:before{content:'\25BE'}
+.fold>summary:hover{color:var(--dim)}
+.fold .in{padding:10px 0 2px}
+.hint{font-size:11.5px;color:var(--faint);line-height:1.6;margin-top:6px}
+/* =====================================================================
+   SHELL  2026-09-13
+   Three columns that never scroll as a page: every meeting on the left,
+   the one thing this meeting needs in the middle, the document on the
+   right. Under 1400px the document column is moved (in the DOM) into the
+   fourth stage tab, because 1396px is the narrowest a real three-column
+   reading layout fits: 196 rail + 760 work + 440 paper.
+   ===================================================================== */
+body{font-size:13px}
+
+/* ---- title bar: one chip for seven checks -------------------------- */
+.hdr{height:var(--h-top);gap:10px;padding:0 10px;background:var(--pane)}
+.hdr .in{gap:10px}
+.logo{font-size:12.5px;font-weight:590;letter-spacing:-.01em}
+.logo b{width:19px;height:19px;font:590 9.5px/19px var(--mono)}
+.hdr .rt{gap:2px}
+/* A check that passed does not need to be on screen. One that did not puts
+   itself back next to the summary chip, and nothing else does. */
+.rack{background:var(--pane-2);border:1px solid var(--line);padding:2px 3px;gap:2px;
+  overflow:visible;border-radius:999px}
+.rack:empty{display:none}
+/* Seven checks, seven LEDs, always on screen. A lamp that is green needs no words; a
+   lamp that is not puts its own name back next to the light. */
+.lamp{display:flex;padding:3px 8px 3px 6px;border-radius:999px;gap:5px}
+.lamp .t{display:inline;font:11px/1 var(--sans);color:var(--faint);white-space:nowrap}
+.lamp:hover .t{color:var(--text)}
+.lamp.warn,.lamp.fail{background:var(--pane-2);box-shadow:inset 0 0 0 1px var(--line);border:0}
+.lamp.warn .t{color:var(--warn-t)}
+.lamp.fail .t{color:var(--bad-t)}
+.rack>.rl{font:590 10px/1 var(--sans);letter-spacing:.08em;color:var(--faint);
+  padding:0 7px 0 5px;border-right:1px solid var(--line);margin-right:3px;flex:none}
+.gsep{display:none}
+/* Names cost width. Below 1500 the labels go, below 1150 the rack goes and the
+   summary chip speaks for it - never the other way round. */
+@media (max-width:1500px){.lamp .t{display:none}
+  .lamp.warn .t,.lamp.fail .t{display:inline}.rack>.rl{display:none}}
+/* a lit LED, no halo: the glow was reading as a defect on a dark panel */
+.led.ok{box-shadow:0 0 0 2px var(--ok-dim)}
+.led.warn{box-shadow:0 0 0 2px var(--warn-dim)}
+.led.fail{box-shadow:0 0 0 2px var(--bad-dim)}
+.led.busy{box-shadow:0 0 0 2px var(--info-dim)}
+
+/* ---- the three columns -------------------------------------------- */
+.lay{display:grid;grid-template-columns:var(--w-ses) minmax(0,1fr) var(--w-doc);
+  height:calc(100vh - var(--h-top));overflow:hidden}
+.col{display:flex;flex-direction:column;min-width:0;min-height:0}
+.col.ses{background:var(--pane-2);border-right:1px solid var(--line)}
+.col.doc{background:var(--pane-2);border-left:1px solid var(--line)}
+.ch{flex:none;display:flex;align-items:center;gap:7px;height:36px;padding:0 10px;
+  border-bottom:1px solid var(--line);min-width:0}
+.ch b{font-size:12px;font-weight:590;letter-spacing:-.01em;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch{flex-wrap:nowrap;white-space:nowrap}
+.ch .ex{display:flex;gap:4px;align-items:center;margin-left:auto}
+.cb{flex:1;min-height:0;overflow:auto;padding:6px}
+.cf{flex:none;height:26px;display:flex;align-items:center;padding:0 10px;
+  border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
+
+/* ---- every meeting on this machine -------------------------------- */
+.sgr{font:590 10.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);padding:10px 6px 5px}
+.sgr:first-child{padding-top:2px}
+.si{display:block;padding:6px 8px;border-radius:var(--r);cursor:pointer;
+  color:var(--dim);text-decoration:none}
+.si:hover{background:var(--pane-3);color:var(--text)}
+.si.on{background:var(--acc-soft);color:var(--text);
+  box-shadow:inset 0 0 0 1px rgba(94,106,210,.35)}
+.si>b{display:block;font-weight:500;font-size:12px;line-height:1.35;color:inherit;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.si .r{display:flex;align-items:center;gap:6px;margin-top:2px;min-width:0}
+.si .r s{text-decoration:none;font:10.5px/1.3 var(--mono);color:var(--faint);flex:none}
+.si .r em{font-style:normal;font-size:10.5px;color:var(--faint);margin-left:auto;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.si .r em.g{color:var(--ok)}.si .r em.w{color:var(--warn)}.si .r em.e{color:var(--bad)}
+.si.rec>b{color:var(--bad)}
+.agr{margin-top:8px;border-top:1px solid var(--hair);padding-top:6px}
+.agr>summary{cursor:pointer;list-style:none;font-size:11px;color:var(--faint);
+  padding:4px 6px;border-radius:var(--r)}
+.agr>summary::-webkit-details-marker{display:none}
+.agr>summary:before{content:'\25B8';font-size:9px;padding-right:5px}
+.agr[open]>summary:before{content:'\25BE'}
+.agr>summary:hover{color:var(--dim);background:var(--pane-3)}
+
+/* ---- what this meeting needs now ---------------------------------- */
+.col.wk{background:var(--bg)}
+.wkp{flex:1;min-height:0;display:flex;flex-direction:column}
+.wh{flex:none;display:flex;align-items:center;gap:9px;padding:14px 16px 0;min-width:0}
+.wh h1{margin:0;font:590 16px/1.3 var(--sans);letter-spacing:-.02em;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wh .sub{font-size:11.5px;color:var(--faint)}
+.wm{padding:8px 16px 0}
+/* Facts read as modules, not as a run-on line: one box per fact, scannable at a glance */
+.mods{display:flex;gap:8px;flex-wrap:wrap;padding:11px 16px 0}
+.mod{flex:1 1 0;background:var(--pane-2);border:1px solid var(--line);
+  border-radius:var(--r);padding:7px 10px 8px;min-width:0}
+.mod u{display:block;text-decoration:none;font:10px/1 var(--sans);color:var(--faint);
+  letter-spacing:.06em;margin-bottom:5px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.mod b{display:block;font:600 14px/1.2 var(--mono);color:var(--text);letter-spacing:.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mod b.tx{font-family:var(--sans);font-size:12.5px;font-weight:500;letter-spacing:0}
+.mod.wide{flex:2.4 1 0}
+/* standing facts about the meeting read as one line, not as a table of rows */
+.wm.kvs{display:flex;flex-wrap:wrap;gap:2px 16px;margin:0;font-size:11.5px}
+.wm.kvs div{border:0;padding:0;gap:6px}
+.wm.kvs i{min-width:0}
+.wm.kvs b{font-weight:500;font-size:11.5px}
+.nxt{padding:10px 16px 0;font-size:12px;color:var(--dim);line-height:1.6}
+.nxt:empty{display:none}
+.nxt b{color:var(--text);font-weight:590}
+.col.wk .alert,.col.wk .prog{margin:12px 16px 0}
+.col.wk .prog{margin-bottom:0}
+
+/* ---- the four stages are the navigation --------------------------- */
+.stp{display:flex;gap:0;flex-wrap:nowrap;margin:14px 0 0;padding:0 16px;
+  border-bottom:1px solid var(--line);overflow-x:auto}
+.stp .tb{display:flex;align-items:center;gap:7px;padding:7px 12px;cursor:pointer;
+  color:var(--faint);text-decoration:none;border-bottom:2px solid transparent;
+  margin-bottom:-1px;white-space:nowrap;border-radius:var(--r) var(--r) 0 0}
+.stp .tb:hover{color:var(--dim);background:var(--pane-2)}
+.stp .tb>u{text-decoration:none;font:10px/1 var(--mono);flex:none;opacity:.85}
+.stp .tb>b{font:500 12px/1 var(--sans);color:inherit}
+.stp .tb>i{font-style:normal;font:10.5px/1 var(--mono);opacity:.8}
+.stp .tb.done{color:var(--dim)}
+.stp .tb.done>u{color:var(--ok)}
+.stp .tb.now>u{color:var(--acc)}
+.stp .tb.on{color:var(--text);border-bottom-color:var(--primary-hi)}
+.stp .tb.on>b{font-weight:590}
+.stp .tb.off{display:none}
+.stp.run .tb.now>u{animation:pulse 1.25s ease-in-out infinite}
+
+/* ---- the stage's own work ----------------------------------------- */
+.wb{flex:1;min-height:0;overflow:auto;padding:0 16px 20px}
+.pn{padding-top:14px}
+/* the document tab hands its whole area to the paper, with no page padding */
+.wb.flush{overflow:hidden;padding:0;display:flex}
+.wb.flush>.pn{padding:0;flex:1;min-height:0;display:flex}
+/* the one button that ends the confirm desk stays reachable without scrolling */
+.cfmgo{position:sticky;bottom:-20px;z-index:2;background:var(--bg);
+  padding:12px 0;margin-top:18px;border-top:1px solid var(--line)}
+
+/* ---- panels stop being cards inside cards ------------------------- */
+.card{background:none;border:0;border-radius:0;margin:0 0 22px}
+.card:last-child{margin-bottom:0}
+.hd{height:auto;background:none;border:0;border-radius:0;padding:0 0 8px}
+.hd .no{display:none}
+.hd h2{font-size:14px;font-weight:590;letter-spacing:-.01em}
+.bd{padding:0}
+.bd[style]{padding:0!important}
+
+/* ---- the document ------------------------------------------------- */
+.col.doc .cb{padding:10px;overflow:hidden;display:flex;flex-direction:column;gap:8px}
+.col.doc .cb>.alert,.col.doc .cb>.empty{flex:none}
+.docf{flex:1;width:100%;height:auto;min-height:0;border:0;border-radius:var(--r);
+  background:#fff;box-shadow:var(--sh);display:block}
+.ch .ex .tag{flex:none}
+/* Below 1400 the paper takes the whole fourth tab. Nothing sits beside it: everything
+   the old rail listed is already printed on the paper. */
+#pn_doc>.col.doc{flex:1;min-height:0;background:var(--bg);border-left:0}
+#pn_doc>.col.doc .cb{padding:12px}
+#pn_doc>.col.doc .cb>.pw{flex:1;min-width:0;width:100%;display:flex;max-width:900px;margin:0 auto}
+
+/* Reading is a mode. The document is the product, so it can have the whole window. */
+body.zen .col.ses{display:none}
+@media (min-width:1400px){
+  body.zen .lay{grid-template-columns:minmax(0,1fr)}
+  body.zen .col.wk{display:none}
+  body.zen .col.doc{width:auto;flex:1;border-left:0}
+  body.zen .col.doc .cb>.pw{max-width:1080px;margin:0 auto;width:100%}
+}
+@media (max-width:1399px){
+  body.zen #res>.wh,body.zen #res>.mods,body.zen #res_stp,body.zen #res_now{display:none}
+  body.zen #pn_doc>.col.doc .cb>.pw{max-width:none}
+}
+
+/* correcting the draft: the same box, the source instead of the paper */
+.edw{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.edw textarea{flex:1;min-height:0;width:100%;resize:none;tab-size:2;
+  font:12.5px/1.75 var(--mono);padding:14px 16px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--pane-2);color:var(--text)}
+.edw textarea:focus{outline:none;border-color:var(--primary)}
+.edb{display:flex;align-items:center;gap:8px;flex:none}
+
+/* the alert and the paper are one stack, and the rail is beside the stack */
+.col.doc .cb>.pw{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:8px}
+.col.doc .cb>.pw>.alert,.col.doc .cb>.pw>.wrt{flex:none}
+
+/* ---- the minutes engine ------------------------------------------- */
+/* Three routes to a body of text, and exactly one of them live. The card is a chooser,
+   not a page of fields: the route is the decision and the fields only follow it, so an
+   unpicked route folds its fields away instead of asking about them. */
+.eng{display:flex;flex-direction:column;gap:9px}
+.eno{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--pane-2);
+  overflow:hidden}
+.eno.on{border-color:var(--primary);background:var(--acc-soft)}
+.eno:not(.on) .eb{display:none}
+.eh{display:flex;align-items:center;gap:9px;padding:11px 13px;cursor:pointer}
+.eno:not(.on) .eh:hover{background:var(--pane-3)}
+.eh>u{width:15px;height:15px;flex:none;border-radius:50%;border:1px solid var(--edge);
+  text-decoration:none;position:relative;background:var(--bg)}
+.eno.on .eh>u{border-color:var(--primary);background:var(--primary)}
+.eno.on .eh>u:after{content:"";position:absolute;inset:4px;border-radius:50%;background:#fff}
+.eh>b{font-size:13px;font-weight:600;flex:none}
+.eh>i{font-style:normal;font-size:11.5px;color:var(--faint);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.eb{padding:2px 13px 13px}
+.epr{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:11px 0 2px}
+.epr>b{font-weight:400;font-size:11.5px;color:var(--faint);margin-right:2px}
+.est{margin:9px 0 0;padding-left:20px;font-size:12px;color:var(--dim);line-height:1.95}
+.est b{color:var(--text);font-weight:600}
+
+/* the body of the minutes has to come from somewhere; this says from where, and does it */
+.wrt{border:1px solid var(--line);border-radius:var(--r);background:var(--pane-2);
+  padding:10px 12px;display:flex;flex-direction:column;gap:9px}
+.wrt .w1{font-size:12px;color:var(--faint);line-height:1.65}
+.wrt .w1 b{color:var(--text);font-weight:600}
+
+/* ---- settings is a mode, not a column ----------------------------- */
+.page{position:absolute;inset:var(--h-top) 0 0 0;overflow:auto;background:var(--bg);
+  padding:20px 24px 60px;z-index:3}
+.page .in{max-width:900px;margin:0 auto}
+.kvs.facts{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+
+/* ---- motion ------------------------------------------------------- */
+/* An indeterminate bar that never stops is a marquee. Told to sit still, it
+   states the one thing it knows: something is running. */
+@media (prefers-reduced-motion:reduce){
+  .prog .pb i{animation:none;width:100%;opacity:.5}
+  .stp.run .tb.now>u{animation:none}
+}
+
+/* ---- a wide monitor spends its extra width on the document -------- */
+@media (min-width:1900px){:root{--w-doc:540px}}
+@media (min-width:2300px){:root{--w-doc:680px}}
+
+/* ---- 1400: the document folds into the fourth tab ----------------- */
+@media (max-width:1399px){
+  .lay{grid-template-columns:var(--w-ses) minmax(0,1fr)}
+}
+/* ---- 1080: one column, the meeting list becomes a drawer ---------- */
+@media (max-width:1080px){
+  .lay{grid-template-columns:minmax(0,1fr)}
+  .col.ses{position:fixed;left:0;top:var(--h-top);bottom:0;width:260px;z-index:6;
+    transform:translateX(-100%);transition:transform .16s;box-shadow:var(--sh)}
+  body.sesopen .col.ses{transform:none}
+}
+
+
+/* =====================================================================
+   DONE IS A COLOUR  2026-09-13c
+   A decision that has been made must look different from one that has not,
+   whichever way it went. "Keep the original" is as much an answer as
+   "take the replacement", so both earn the same finished chrome and the
+   difference between them is stated in words, not in loudness. Once the
+   whole list is answered the loudness comes off entirely: an empty
+   in-tray should look calm, not decorated.
+   ===================================================================== */
+/* ---- one word, one decision ---------------------------------------- */
+.qi{position:relative;border-left:3px solid transparent;transition:border-color .12s}
+/* not answered yet: this is the work, so it is the loud one */
+.qz .qi:not(.yes):not(.no):not(.cust){border-color:rgba(242,201,76,.5);
+  border-left-color:var(--warn);
+  background:linear-gradient(90deg,var(--warn-dim),transparent 220px)}
+.qz .qi:not(.yes):not(.no):not(.cust) .stt{color:var(--warn-t);
+  border-color:rgba(242,201,76,.45);background:var(--warn-dim)}
+/* answered, either way: the whole frame goes green. Green here means "I have
+   dealt with this", not "I took the suggestion", so keeping the original earns
+   the same frame - and it stays green after the list is finished, because a
+   finished row is still a finished row. */
+.qz .qi.yes,.qz .qi.no,.qz .qi.cust{border-color:rgba(39,166,68,.5);
+  border-left-color:var(--ok)}
+.qz .qi.yes .stt,.qz .qi.no .stt,.qz .qi.cust .stt{color:var(--ok-t);
+  border-color:rgba(39,166,68,.45);background:var(--ok-dim)}
+/* the chosen button is filled and ticked, whichever one was chosen */
+.sw button.on:before{content:'\2713';font:10px/1 var(--mono);margin-right:5px}
+.sw button.on,.sw button.on.x,.sw button.o3.on{background:var(--ok);color:#fff;
+  font-weight:600;box-shadow:none}
+/* the section header carries the count, so the answer to "am I done" is one glance */
+.grp .tag.green:before{content:'\2713';margin-right:4px;font:10px/1 var(--mono)}
+
+/* ---- the four stages say done / doing / not started ---------------- */
+.stp .tb>u{width:15px;height:15px;border-radius:50%;display:inline-flex;
+  align-items:center;justify-content:center;font:9px/1 var(--mono);
+  box-shadow:inset 0 0 0 1.2px var(--edge);color:var(--faint);opacity:1}
+.stp .tb.done>u{background:var(--ok);color:#fff;box-shadow:none}
+.stp .tb.done{color:var(--dim)}
+.stp .tb.done>i{color:var(--ok-t)}
+.stp .tb.now>u{background:var(--info);color:#08090a;box-shadow:none}
+.stp .tb.now>i{color:var(--info-t)}
+
+/* ---- light theme, second pass -------------------------------------
+   The dark theme got the depth pass; this one had not. Same geometry,
+   but every surface is placed on the one below it: the canvas is grey,
+   a panel is white, a control is a shade of grey darker than the panel
+   it sits in, and a border is visible without being a line drawing. */
+[data-theme=light] .hdr{background:var(--pane);
+  box-shadow:0 1px 3px rgba(16,24,40,.06)}
+[data-theme=light] .col.ses,[data-theme=light] .col.doc{background:var(--pane)}
+[data-theme=light] .col.wk{background:var(--bg)}
+[data-theme=light] .rack{background:var(--pane-2)}
+/* cards on a grey canvas are white; cards on a white panel are grey */
+[data-theme=light] .mod,[data-theme=light] .qi,[data-theme=light] .ii,
+[data-theme=light] .card{background:var(--pane);border-color:var(--line)}
+[data-theme=light] .ar label,[data-theme=light] .sw{background:var(--pane-2)}
+[data-theme=light] .btn:not(.pri):not(.dgr){background:var(--pane-2)}
+[data-theme=light] .btn:not(.pri):not(.dgr):hover{background:var(--pane-3)}
+[data-theme=light] .sw button:not(.on){background:var(--pane-2);color:var(--dim)}
+[data-theme=light] .sw button:not(.on):hover{background:var(--pane-3)}
+[data-theme=light] input[type=text],[data-theme=light] textarea,
+[data-theme=light] select{background:var(--pane);border-color:var(--line)}
+[data-theme=light] .qi .qh code{background:var(--pane-2);border-color:var(--line)}
+[data-theme=light] .qi .ctx .cl{color:var(--dim)}
+[data-theme=light] .mod u{color:var(--faint)}
+[data-theme=light] .cb{background:transparent}
+[data-theme=light] .stp{border-bottom-color:var(--line)}
+[data-theme=light] .stp .tb.now>u{color:#fff}
+[data-theme=light] .si:hover{background:var(--pane-3)}
+[data-theme=light] .si.on{background:var(--acc-soft);
+  box-shadow:inset 0 0 0 1px rgba(81,88,201,.35)}
+[data-theme=light] .thsw{background:var(--pane-2)}
+[data-theme=light] .thsw .tr{background:var(--pane-3)}
+[data-theme=light] .docf{box-shadow:0 1px 3px rgba(16,24,40,.10),0 10px 30px rgba(16,24,40,.10)}
+[data-theme=light] .cf,[data-theme=light] .ch{border-color:var(--line)}
+[data-theme=light] .grp>u{background:var(--pane-3);color:var(--dim)}
+[data-theme=light] .btn.ana{background:var(--pane-2)}
+[data-theme=light] ::selection{background:rgba(81,88,201,.22);color:var(--text)}
+
+/* ---- the two column borders are handles ----------------------------
+   Reading a document beside a work column only works if the reader
+   decides how the width is split, so both borders drag and the choice
+   is remembered. Double click puts a column back to its design width. */
+.lay{position:relative}
+.gut{position:absolute;top:0;bottom:0;width:9px;margin-left:-4px;cursor:col-resize;
+  z-index:6;touch-action:none}
+.gut:after{content:'';position:absolute;left:4px;top:0;bottom:0;width:1px;
+  background:transparent;transition:background .12s,width .12s}
+.gut:hover:after,.gut.on:after{background:var(--primary-hi);width:2px;left:3.5px}
+.gut.g1{left:var(--w-ses)}
+.gut.g2{left:calc(100% - var(--w-doc))}
+body.zen .gut{display:none}
+@media (max-width:1399px){.gut.g2{display:none}}
+@media (max-width:920px){.gut{display:none}}
+
+/* ---- a meeting can be named, and a name can be changed -------------- */
+.si{position:relative}
+.si .rn{position:absolute;right:5px;top:5px;display:none;align-items:center;
+  justify-content:center;width:20px;height:20px;border-radius:4px;color:var(--faint);
+  background:var(--pane-3);box-shadow:inset 0 0 0 1px var(--line)}
+.si:hover .rn{display:inline-flex}
+.si .rn:hover{color:var(--text);background:var(--pane-4)}
+.si input.ri{width:100%;font:500 12px/1.35 var(--sans);color:var(--text);
+  background:var(--pane);border:1px solid var(--primary);border-radius:4px;
+  padding:2px 5px;outline:none}
+.si>b em{font-style:normal;color:var(--faint);font-weight:400}
+.si .cl{flex:none;color:var(--faint);display:inline-flex}
+.si.arc>b{color:var(--dim)}
+
+/* =====================================================================
+   A STAGE IS A MODULE  2026-09-13d
+   Four numbered stages stacked in one column read as one long page
+   unless each is physically a block: its own surface, a border you can
+   see, and a little lift off the page. Same geometry in both palettes,
+   because the complaint was about structure, not about colour.
+   ===================================================================== */
+:root{--lift:0 1px 0 rgba(255,255,255,.03) inset,0 1px 2px rgba(0,0,0,.3),
+  0 6px 14px -10px rgba(0,0,0,.55)}
+:root[data-theme=light]{--lift:0 1px 0 #fff inset,0 1px 2px rgba(16,24,40,.07),
+  0 8px 16px -12px rgba(16,24,40,.28)}
+.stg{background:var(--pane);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:12px 14px 14px;margin:14px 0;box-shadow:var(--lift)}
+.stg>.grp:first-child{margin-top:0}
+[data-theme=light] .stg{background:var(--pane)}
+.mod,.card,.ii,.qi{box-shadow:var(--lift)}
+/* the four stages of the pipeline are modules too, not words in a row */
+.stp{gap:6px;padding:12px 16px}
+.stp .tb{border:1px solid var(--line);border-radius:999px;background:var(--pane-2);
+  border-bottom-width:1px;margin-bottom:0;box-shadow:var(--lift)}
+.stp .tb.done{border-color:rgba(39,166,68,.45);background:var(--ok-dim)}
+.stp .tb.now{border-color:rgba(90,200,250,.45);background:var(--info-dim)}
+.stp .tb.on{border-color:var(--primary-hi)}
+
+/* =====================================================================
+   NATIVE CONTROLS  2026-09-13f
+   A date field, a select popup, a checkbox and a scrollbar are drawn by
+   the browser, not by this stylesheet, and they default to white. One
+   declaration - color-scheme - tells the browser which palette it is
+   painting into, which fixes the calendar popup and the scrollbars that
+   no selector can reach. The field itself still needs the same face as
+   every other input, so it is listed with them rather than left native.
+   ===================================================================== */
+:root{color-scheme:dark}
+:root[data-theme=light]{color-scheme:light}
+input[type=date],input[type=time],input[type=number],input[type=search]{
+  height:28px;padding:0 8px;border-radius:var(--r);border:1px solid var(--line);
+  background:var(--pane-2);color:var(--text);font:12.5px var(--sans)}
+input[type=date]:hover,input[type=time]:hover,input[type=number]:hover,
+input[type=search]:hover{border-color:var(--edge)}
+input[type=date]:focus,input[type=time]:focus,input[type=number]:focus,
+input[type=search]:focus{outline:none;border-color:var(--primary-hi);
+  box-shadow:0 0 0 2px rgba(99,102,241,.18)}
+[data-theme=light] input[type=date],[data-theme=light] input[type=time],
+[data-theme=light] input[type=number],[data-theme=light] input[type=search]{
+  background:var(--pane);border-color:var(--line)}
+/* the little calendar glyph is a bitmap the browser owns; tint it to match */
+::-webkit-calendar-picker-indicator{opacity:.55;cursor:pointer;
+  filter:invert(1) brightness(1.6)}
+::-webkit-calendar-picker-indicator:hover{opacity:1}
+[data-theme=light] ::-webkit-calendar-picker-indicator{filter:none}
+input[type=date]::-webkit-datetime-edit{color:var(--dim)}
+input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
+</style>
+<body>
+
+<!-- One icon set for the whole tool: stroke-only, 24x24, sized by CSS, coloured by
+     currentColor. Any new control takes its glyph from here instead of a text label. -->
+<svg class="sprite" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+<symbol id="i-hist" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M12 13v8"/><path d="m8 17 4-4 4 4"/><path d="M20.9 18.4A5 5 0 0 0 18 9h-1.3A8 8 0 1 0 4 16.9"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+<symbol id="i-redo" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="i-max" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></symbol>
+<symbol id="i-min" viewBox="0 0 24 24"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="m6 3 14 9-14 9z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></symbol>
+<symbol id="i-lang" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></symbol>
+<symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12h2M6 8v8M10 4v16M14 7v10M18 10v4M22 12h0"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+</defs></svg>
+
+<!-- Title bar. Seven checks run behind one chip: a check that passes does not need to sit
+     on screen, and a check that fails puts itself back next to the chip. Everything that
+     is not this meeting -- history, settings, appearance -- lives here and nowhere else. -->
+<header class="hdr"><div class="in">
+  <div class="logo"><b>MD</b>纪要台</div>
+  <div class="rack" id="rack" title="自检：点击任一项看明细"></div>
+  <span class="tag act" id="topst" onclick="lampGo('*')" hidden></span>
+  <span class="tag red" id="e_meet" hidden></span>
+  <div class="rt">
+    <button class="btn ib" id="v_hist" onclick="go('hist')" title="历史会议">
+      <svg class="ic"><use href="#i-hist"/></svg><i class="ct" id="e_hist"></i></button>
+    <button class="btn ib" id="v_cfg" onclick="go('cfg')" title="设置">
+      <svg class="ic"><use href="#i-gear"/></svg></button>
+    <button class="thsw lgsw" id="lgsw" data-notr onclick="flipLang()" role="switch"
+      title="界面语言 / Interface language">
+      <b>中</b><span class="tr"><i></i></span><b>EN</b></button>
+    <button class="thsw" id="thm" onclick="flipTheme()" role="switch"
+      title="深色 / 浅色外观">
+      <svg class="ic s"><use href="#i-sun"/></svg>
+      <span class="tr"><i></i></span>
+      <svg class="ic m"><use href="#i-moon"/></svg></button>
+    <span hidden id="e_doc"></span>
+  </div>
+</div></header>
+
+<!-- The page is re-read from disk on every refresh; the Python behind it is not. A window
+     left running from an older start therefore serves new HTML against old code, and the
+     symptoms look like data bugs. When the two stamps disagree, say exactly that. -->
+<div class="oldb" id="oldban" hidden></div>
+<div class="pop" id="pop"></div>
+
+<!-- Three columns: every meeting, the one thing this meeting needs, and the document.
+     The window itself never scrolls; each column carries its own scrollbar. Under 1400px
+     the document column becomes the fourth stage tab instead. -->
+<div class="lay" id="shell">
+  <div class="gut g1" id="gut1" title="拖动调宽窄，双击复位"></div>
+  <div class="gut g2" id="gut2" title="拖动调宽窄，双击复位"></div>
+
+  <!-- ===================================================== every meeting on this machine -->
+  <aside class="col ses">
+    <div class="ch">
+      <button class="btn pri f1" onclick="newRec()"
+        title="开始一场新会议：填名称与与会人，然后录制">&#9654; 新录音</button>
+    </div>
+    <div class="cb" id="seslist">
+      <div id="slist"></div>
+      <details class="agr" open><summary>已归档 <i class="ct" id="hsub2"></i></summary>
+        <div id="alist"></div></details>
+      <pre class="log" id="hlog" hidden></pre>
+    </div>
+    <div class="cf"><span id="hsub1"></span></div>
+  </aside>
+
+  <!-- ===================================================== what this meeting needs now -->
+  <section class="col wk">
+
+    <!-- Stage zero: no meeting is selected, or one is being recorded right now. -->
+    <div class="wkp" id="prep">
+      <div class="wh"><h1 id="prep_h">会议准备</h1>
+        <span class="tag" id="prep_st"></span>
+        <span class="sub" id="prep_sub"></span></div>
+      <div class="wb">
+        <div class="pn">
+          <div class="alert todo" id="vd" hidden>
+            <div class="ai">i</div><div class="at"><h3></h3><p></p></div>
+          </div>
+          <div id="recidle">
+            <div class="fitem">
+              <label for="r_title">会议名称</label>
+              <div class="row">
+                <input type="text" id="r_title" class="f1" placeholder="例如 Nexus capacity planning">
+                <button class="btn" id="olgo" onclick="olLoad()"
+                  title="读本机 Outlook 今天的日历，选一场就填好名称和与会人">从 Outlook 载入</button>
+                <label class="dpick" id="oldaywrap" hidden>换一天
+                  <input type="date" id="olday" title="要看哪一天的日历"
+                         onchange="olLoad()"></label>
+              </div>
+            </div>
+            <div class="ol" id="olbox"></div>
+
+            <div class="fitem" style="margin-top:10px">
+              <label for="r_others">与会人<i>粘贴会议邀请的收件人或一串名字，自动识别</i></label>
+              <textarea id="r_others" rows="2"
+                placeholder="Smith, Alex; Garcia, Maria; Chen, Wei"></textarea>
+              <div class="chips" id="r_chips"></div>
+            </div>
+
+            <div class="row" style="margin-top:11px">
+              <label class="chk"><input type="checkbox" id="r_video"><span>同时录制屏幕</span></label>
+              <label class="chk"><input type="checkbox" id="r_sens"><span>敏感会议</span>
+                <em>生成纪要后删除音频</em></label>
+              <span class="f1"></span>
+              <span id="recmsg" class="msg"></span>
+              <button class="btn pri lg" id="recgo" onclick="recStart()">开始录制</button>
+            </div>
+          </div>
+          <div id="reclive" hidden>
+            <div class="row">
+              <span class="big" id="l_time">00:00:00</span>
+              <span class="tag red">录制中</span>
+              <span class="tag" id="l_priv" hidden>私密段</span>
+              <span class="tag" id="l_bm" hidden></span>
+              <span class="f1"></span>
+              <button class="btn" id="l_vgo" onclick="recCmd('video')"
+                title="现在开始录屏：有人开始共享屏幕时点这里">开始录屏</button>
+              <button class="btn" onclick="recCmd('mark')">插入书签</button>
+              <button class="btn" onclick="recCmd('private')">私密段</button>
+              <button class="btn dgr lg" onclick="recCmd('stop')">停止录制</button>
+            </div>
+            <div class="kvs" id="l_meta" style="margin-top:12px"></div>
+            <div id="l_mtrs" style="margin-top:6px"></div>
+            <div id="l_video" class="fs" style="margin-top:12px"></div>
+            <div id="l_warn"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A meeting that exists: who and when, then the four stages, then the stage's work.
+         The line under the title is the only place that answers "now what". -->
+    <div class="wkp" id="res" hidden>
+      <div class="wh"><h1 id="res_h">本场会议</h1>
+        <span class="tag" id="res_st"></span>
+        <span class="f1"></span>
+        <button class="btn ib" id="res_open" hidden onclick="openMinutes()" title="查看纪要">
+          <svg class="ic"><use href="#i-doc"/></svg></button>
+        <button class="btn ib" id="res_up" hidden onclick="upSes()"
+          title="上传至 OneDrive（本地仅保留索引）">
+          <svg class="ic"><use href="#i-cloud"/></svg></button>
+        <button class="btn ana" id="anago" onclick="doAnalysis()">
+          <svg class="ic"><use href="#i-wave"/></svg><span id="anat">语音识别</span></button>
+      </div>
+      <div class="mods" id="res_meta"></div>
+      <div class="alert" id="res_ban" hidden>
+        <div class="ai">i</div><div class="at"><h3></h3><p></p></div>
+      </div>
+      <div class="nxt" id="res_now"></div>
+
+      <!-- The four stages are the navigation. Each one reports its own state, so the tab
+           strip and the progress of the meeting are the same object. -->
+      <nav class="stp" id="res_stp"></nav>
+      <div class="prog" id="res_prog" hidden>
+        <div class="ph"><span class="spin"></span><b id="pg_t">正在处理</b>
+          <i id="pg_s"></i><span class="f1"></span><em id="pg_e">0:00</em>
+          <button class="btn txt sm" id="pg_lg" onclick="pgLog()">查看日志</button></div>
+        <div class="pb"><i></i></div>
+        <pre class="log" id="jlog" hidden></pre>
+      </div>
+
+      <div class="wb" id="wb">
+        <!-- 1 录音: the evidence -->
+        <div class="pn" id="pn_rec">
+          <div class="kvs" id="res_meta2"></div>
+          <div class="fs" style="margin-top:12px">原始文件</div>
+          <div class="fl raw" id="res_raw" style="margin-top:6px"></div>
+        </div>
+        <!-- 2 语音识别: the heavy step and what it produced -->
+        <div class="pn" id="pn_asr" hidden>
+          <div id="res_out"></div>
+        </div>
+        <!-- 3 校对确认: the only place a person is required -->
+        <div class="pn" id="pn_fix" hidden>
+          <div id="res_cfm" hidden>
+            <div class="stg" id="c_awrap">
+            <div class="grp"><u>1</u><h4>参加会议的人</h4>
+              <span class="f1"></span>
+              <button class="btn sm" id="c_inv" onclick="pullInvite()">从 Outlook 读取邀请</button></div>
+            <div class="att" id="c_att"></div>
+            <div class="hint" id="c_ahint"></div>
+            <!-- Two different jobs, two different controls: the tick decides who was there,
+                 the 「改」 next to a name fixes how it is spelt, and this box only adds. -->
+            <div class="row" style="margin-top:9px">
+              <input type="text" id="c_add" class="f1" placeholder="补充遗漏的与会人，多人用分号分隔，回车确认"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();addAtt()}">
+              <button class="btn sm" onclick="addAtt()">添加</button>
+            </div>
+            <div class="fitem" style="margin-top:10px">
+              <label for="c_title">会议名称<i>留空则用默认名，也用作邮件主题</i></label>
+              <input type="text" id="c_title" oninput="cfEdit('title')">
+            </div>
+            </div>
+
+            <div class="stg" id="c_qwrap" hidden>
+              <div class="grp"><u>2</u><h4>术语校对</h4>
+                <i>听到的写法与词表正名不一致</i><span class="f1"></span>
+                <span class="tag" id="c_qn"></span></div>
+              <div class="qz" id="c_qz"></div>
+            </div>
+
+            <div class="stg" id="c_iwrap" hidden>
+              <div class="grp"><u>3</u><h4>其他情况</h4>
+                <i>每条均标注是否需要处理；确认后勾选，未勾选亦可生成纪要</i><span class="f1"></span>
+                <span class="tag" id="c_in"></span></div>
+              <div class="iz" id="c_iz"></div>
+            </div>
+
+            <div class="row cfmgo">
+              <label class="chk"><input type="checkbox" id="c_sens"><span>敏感会议</span>
+                <em>纪要生成后删除音频</em></label>
+              <span class="f1"></span>
+              <span class="msg" id="c_msg"></span>
+              <button class="btn pri lg" id="c_go" onclick="doConfirm()">确认，生成纪要</button>
+            </div>
+          </div>
+        </div>
+        <!-- 4 纪要: the document column moves in here below 1400px -->
+        <div class="pn" id="pn_doc" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== the document -->
+  <aside class="col doc" id="coldoc">
+    <div class="ch"><b id="doc_h">纪要</b><span class="tag" id="doc_st"></span>
+      <span class="f1"></span>
+      <span class="ex" id="doc_ex">
+        <button class="btn ib" id="doc_ed" hidden onclick="edStart()" title="编辑正文">
+          <svg class="ic"><use href="#i-edit"/></svg></button>
+        <button class="btn ib" id="doc_rl" hidden onclick="docReload()" title="重新载入">
+          <svg class="ic"><use href="#i-redo"/></svg></button>
+        <button class="btn ib" id="doc_zn" onclick="zenGo()" title="最大化阅读">
+          <svg class="ic"><use href="#i-max" id="doc_zi"/></svg></button>
+        <a class="btn ib" id="doc_nw" hidden target="_blank" title="在新窗口打开">
+          <svg class="ic"><use href="#i-ext"/></svg></a>
+      </span></div>
+    <div class="cb" id="doc_bd"></div>
+  </aside>
+
+</div>
+
+<!-- ===================================================== settings, a mode of its own -->
+<div class="page" id="view_cfg" hidden><div class="in">
+  <section class="card">
+    <div class="hd"><h2>设置</h2>
+      <div class="ex"><span class="sub">署名、存储路径、录屏参数</span>
+        <button class="btn" id="s1go" onclick="levels()">重新检测</button>
+        <button class="btn" onclick="go('meet')">返回会议</button></div>
+    </div>
+    <div class="bd" style="padding:14px">
+      <div class="g2">
+        <div class="fitem"><label for="c_me">署名<i>纪要中标识本人</i></label>
+          <input type="text" id="c_me" placeholder="Alex Smith"></div>
+        <div class="fitem"><label for="c_model">语音识别模型</label>
+          <select id="c_model">
+            <option value="large-v3-turbo">large-v3-turbo（推荐）</option>
+            <option value="medium">medium（更快，准确率较低）</option></select></div>
+      </div>
+      <div class="divider"></div>
+      <div class="g2">
+        <div class="fitem"><label for="c_stage">本地暂存目录<i>录制与处理在此进行</i></label>
+          <input type="text" id="c_stage"></div>
+        <div class="fitem"><label for="c_arch">OneDrive 归档目录<i>确认完成后归档至此</i></label>
+          <input type="text" id="c_arch"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <label class="chk"><input type="checkbox" id="c_archen"><span>开启 OneDrive 归档</span></label>
+        <button class="btn txt" id="c_odbtn" onclick="useOneDrive()">填入检测到的 OneDrive 路径</button>
+      </div>
+      <div class="note" style="margin-top:12px">请勿将暂存目录设在同步目录内：录制过程中 wav 持续增大，
+        同步客户端会全程占用 CPU 与带宽，并可能上传不完整文件。</div>
+      <div class="divider"></div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="c_video"><span>默认录制屏幕</span>
+          <em>实测 153 MB/小时，录制整个桌面，包含他人共享的画面</em></label>
+      </div>
+      <div class="g3" style="margin-top:14px">
+        <div class="fitem"><label for="c_vfps">帧率 fps</label><input type="text" id="c_vfps"></div>
+        <div class="fitem"><label for="c_vcrf">画质 crf<i>值越大体积越小</i></label>
+          <input type="text" id="c_vcrf"></div>
+        <div class="fitem"><label for="c_vw">宽度 px</label><input type="text" id="c_vw"></div>
+      </div>
+      <div class="row" style="margin-top:20px">
+        <button class="btn pri" onclick="saveCfg()">保存设置</button>
+        <span id="cfgmsg" class="msg"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- The one thing a transcript cannot produce by itself is the body of the minutes.
+       Somebody has to read the whole thing and decide what mattered; this card is where
+       you say who that is. -->
+  <section class="card">
+    <div class="hd"><h2>纪要引擎</h2>
+      <div class="ex"><span class="sub">谁把逐字稿写成纪要正文</span></div>
+    </div>
+    <div class="bd" style="padding:14px">
+      <div class="eng" id="engw"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn pri" onclick="engSave()">保存引擎设置</button>
+        <button class="btn" onclick="engLoad(1)">重新检测</button>
+        <span class="msg" id="engmsg"></span>
+      </div>
+      <div class="note" id="engout" hidden></div>
+    </div>
+  </section>
+
+  <!-- Standing facts. They used to run along the bottom of every screen; they are facts
+       about the machine, not about the meeting, so they belong here. -->
+  <section class="card">
+    <div class="hd"><h2>本机状态</h2></div>
+    <div class="bd"><div class="kvs facts">
+      <div><i>署名</i><b id="k_me">—</b></div>
+      <div><i>模型</i><b id="k_model">—</b></div>
+      <div><i>录屏</i><b id="k_video">—</b></div>
+      <div><i>归档</i><b id="k_arch">—</b></div>
+      <div><i>暂存</i><b id="k_stage" title="">—</b></div>
+      <div><i>可录</i><b id="f_free">—</b></div>
+      <div><i>本地</i><b id="f_local">—</b></div>
+      <div><i>已归档</i><b id="f_arch">—</b></div>
+      <div><i>上次实测</i><b id="f_test">—</b></div>
+    </div></div>
+  </section>
+</div></div>
+
+<script src="/i18n.js"></script>
+<script>
+let S = null, jobId = null, tRec = null, tJob = null, busy = false;
+/* Bumped together with BUILD in app.py. The same string on both sides means the page
+   and the server came out of the same copy of the code. */
+const UI_BUILD = '2026-09-13i';
+let staleBE = false;
+
+let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
+let CF = null, picks = {}, jobKind = null;
+
+/* ---- interface language ---------------------------------------------------
+   The screen is authored in Chinese. Switching to English rewrites the text that
+   is already on the page and then keeps rewriting whatever the app draws next, so
+   not one of the three hundred labels has to know that languages exist. The
+   Chinese original is parked on the node itself, which is what makes switching
+   back exact rather than a second translation. i18n.js holds the words. */
+let lang = 'zh', i18nBusy = false, i18nObs = null;
+const I18N_ATTR = ['placeholder', 'title', 'aria-label'];
+const HANZI = /[\u4e00-\u9fff]/;
+const trOne = s => (window.MMT_I18N ? MMT_I18N.tr(s) : s);
+function trNode(n){
+  if (n.nodeType === 3){
+    const v = n.nodeValue;
+    if (lang === 'en'){
+      if (n.__zh === undefined && HANZI.test(v)){ n.__zh = v; n.nodeValue = trOne(v); }
+    } else if (n.__zh !== undefined){ n.nodeValue = n.__zh; n.__zh = undefined; }
+    return;
+  }
+  if (n.nodeType !== 1) return;
+  const tg = n.tagName;
+  if (tg === 'SCRIPT' || tg === 'STYLE' || tg === 'IFRAME' || n.hasAttribute('data-notr')) return;
+  for (const a of I18N_ATTR){
+    if (!n.hasAttribute(a)) continue;
+    const k = '__zh_' + a, v = n.getAttribute(a);
+    if (lang === 'en'){
+      if (n[k] === undefined && HANZI.test(v)){ n[k] = v; n.setAttribute(a, trOne(v)); }
+    } else if (n[k] !== undefined){ n.setAttribute(a, n[k]); n[k] = undefined; }
+  }
+  for (let c = n.firstChild; c; c = c.nextSibling) trNode(c);
+}
+function trAll(root){
+  i18nBusy = true;
+  try { trNode(root || document.body); } finally { i18nBusy = false; }
+}
+function setLangUI(l){
+  lang = l === 'en' ? 'en' : 'zh';
+  document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+  const b = $('#lgsw');
+  if (b){ b.classList.toggle('en', lang === 'en');
+    b.setAttribute('aria-checked', lang === 'en' ? 'true' : 'false'); }
+  try { localStorage.setItem('mmt.uilang', lang); } catch(e){}
+  trAll();
+  // The observer only has to exist while the page is in English.
+  if (lang === 'en' && !i18nObs && window.MutationObserver){
+    i18nObs = new MutationObserver(ms => {
+      if (i18nBusy || lang !== 'en') return;
+      i18nBusy = true;
+      try {
+        for (const m of ms){
+          if (m.type === 'childList') m.addedNodes.forEach(trNode);
+          else trNode(m.target);
+        }
+      } finally { i18nBusy = false; }
+    });
+    i18nObs.observe(document.body, {childList:true, subtree:true, characterData:true,
+      attributes:true, attributeFilter:I18N_ATTR});
+  } else if (lang !== 'en' && i18nObs){ i18nObs.disconnect(); i18nObs = null; }
+  pushLang();
+}
+function flipLang(){ setLangUI(lang === 'en' ? 'zh' : 'en'); }
+/* The document in the third column has its own two languages, because a meeting can
+   be minuted in either. The shell tells it which one to show; its own buttons stay,
+   so one document can be read the other way round without changing the whole app. */
+function pushLang(){
+  const f = document.querySelector('iframe.docf');
+  try { if (f && f.contentWindow) f.contentWindow.postMessage({mmt:'lang', lang:lang}, '*'); }
+  catch(e){}
+}
+
+/* Appearance. Dark by default; the choice is the user's and it is remembered. */
+function setTheme(t){
+  document.documentElement.dataset.theme = t;
+  const dark = t !== 'light';
+  const b = document.getElementById('thm');
+  if (b){ b.classList.toggle('lt', !dark); b.setAttribute('aria-checked', dark ? 'false' : 'true'); }
+  try { localStorage.setItem('mmt.theme', t); } catch(e){}
+  pushTheme();
+}
+/* The document is in an iframe, and an iframe that has already painted will not
+   re-read localStorage. One switch has to change both surfaces or it is not one
+   tool, so the shell tells the paper directly - on every switch, and again every
+   time the paper loads. */
+function pushTheme(){
+  const f = $('.docf');
+  const t = document.documentElement.dataset.theme || 'dark';
+  try { if (f && f.contentWindow) f.contentWindow.postMessage({mmt: 'theme', theme: t}, '*'); }
+  catch (e){}
+}
+function flipTheme(){
+  setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+}
+const $ = s => document.querySelector(s);
+const hms = t => [t/3600|0, t/60%60|0, t%60|0].map(n=>String(n).padStart(2,'0')).join(':');
+const esc = s => (s??'').toString().replace(/[<>&"]/g,
+  c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+
+async function api(p, body){
+  const o = body ? {method:'POST', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify(body)} : {};
+  const r = await fetch(p, o);
+  return r.json();
+}
+
+async function refresh(force){
+  S = await api('/api/state' + (force ? '?doctor=1' : ''));
+  // opening the tool shows the last meeting, not an empty screen
+  if (!cur && !noAuto){
+    const last = (S.sessions || []).find(s => s.state !== 'archived' && s.state !== 'recording');
+    if (last) cur = last.name;
+  }
+  chkBuild();
+  fillCfg(); drawChecks(S.doctor); drawSessions(); drawRec(S.recording);
+}
+
+/* ================================================================= the shell
+   One layout, two shapes. Above 1400px the document is the third column and is
+   always on screen; below it, the same element is moved into the fourth stage
+   tab, so there is one document in the page and never a second copy of it. */
+const WIDE = () => matchMedia('(min-width:1400px)').matches;
+const PN = ['#pn_rec', '#pn_asr', '#pn_fix', '#pn_doc'];
+let tab = 2, tabAuto = true, noAuto = false;
+
+/* Clicking a stage means "show me that stage", and it stops the strip from
+   jumping to wherever the pipeline happens to be on the next heartbeat. */
+function tabGo(i){
+  tab = i; tabAuto = false;
+  drawSteps(ses(cur) || {duration_s:0});
+}
+function panes(){
+  if (WIDE() && tab === 3) tab = 2;
+  PN.forEach((s, i) => { const e = $(s); if (e) e.hidden = i !== tab; });
+  const wb = $('#wb'); if (wb) wb.classList.toggle('flush', tab === 3);
+  placeDoc();
+}
+/* The document moves; it is never duplicated. */
+function placeDoc(){
+  const d = $('#coldoc'), host = WIDE() ? $('#shell') : $('#pn_doc');
+  if (d && host && d.parentElement !== host) host.appendChild(d);
+}
+function go(v){
+  view = v;
+  const cfg = v === 'cfg';
+  if (cfg) engLoad(0);
+  $('#view_cfg').hidden = !cfg;
+  $('#shell').hidden = cfg;
+  $('#v_cfg').classList.toggle('on', cfg);
+  if (v === 'doc'){ if (!WIDE()) tabGo(3); drawDoc(); }
+  if (v === 'hist') document.body.classList.add('sesopen');
+  popHide();
+}
+/* A new meeting is stage zero, so it takes over the work column instead of
+   opening a card somewhere else. */
+function newRec(){
+  cur = null; CF = null; noAuto = true; tabAuto = true;
+  $('#res_cfm').hidden = true;
+  document.body.classList.remove('sesopen');
+  go('meet'); drawCur(); drawState();
+  const t = $('#r_title'); if (t) t.focus();
+}
+matchMedia('(min-width:1400px)').addEventListener('change', () => {
+  docSig = null; panes(); drawDoc();
+});
+
+// =================================================================== checks
+const ICON = {ok:'\u2713', todo:'\u25CB', warn:'!', fail:'\u2715'};
+const AICON = {ok:'\u2713', todo:'i', warn:'!', fail:'\u2715', busy:'i'};
+const SW = {ok:'通过', todo:'待执行', warn:'提示', fail:'未通过'};
+const TG = {ok:'green', warn:'gold', fail:'red', todo:''};
+/* A lamp has to say what it is watching. "回环" is jargon; "系统声音" is the thing that
+   breaks when the other side cannot be heard. */
+const LAMP = {python:'运行环境', packages:'依赖库', model:'识别模型',
+  mic:'麦克风', loopback:'系统声音',
+  levels:'试录音', paths:'磁盘'};
+/* one line each: what the lamp checks, stated the way a report would state it */
+const LAMPW = {python:'运行本工具的 Python 解释器',
+  packages:'转写、录音、录屏所需依赖库是否完整',
+  model:'本机语音识别模型（首次下载后常驻本地）',
+  mic:'录制本人发言的音轨',
+  loopback:'录制计算机播放的声音，即会议中其他人的发言',
+  levels:'实际试录一秒，检测两路音轨有无信号',
+  paths:'暂存目录与可用磁盘空间'};
+
+// dBFS means nothing to a user; say what the number means for this recording
+function loud(db){
+  if (db === null || db === undefined) return '';
+  if (db < -60) return '无信号';
+  if (db < -50) return '电平偏低，可能影响识别';
+  if (db < -30) return '电平偏低，可满足识别';
+  if (db > -1)  return '已达满刻度，存在削波风险';
+  return '电平正常';
+}
+
+/* Seven checks, seven lamps, in the title bar where they stay visible while you work. */
+function drawLamps(d){
+  const rows = d.rows || [];
+  let html = '', g = null;
+  rows.forEach(r => {
+    if (r.group && g !== null && r.group !== g) html += '<span class="gsep"></span>';
+    if (r.group) g = r.group;
+    let cls = r.state === 'fail' ? ' fail' : r.state === 'warn' ? ' warn' : '';
+    if (lampAt === r.id) cls += ' at';
+    html += `<button class="lamp${cls}" data-id="${r.id}" onclick="lampGo('${r.id}')"
+      title="${esc(LAMP[r.id] || r.name)}\uff1a${esc(LAMPW[r.id] || '')}&#10;\u5f53\u524d\uff1a${
+        esc(r.value || '')}&#10;\u70b9\u51fb\u67e5\u770b\u660e\u7ec6"
+      ><span class="led ${r.state}"></span><span class="t">${
+      esc(LAMP[r.id] || r.name)}</span></button>`;
+  });
+  $('#rack').innerHTML = rows.length ? '<span class="rl">自检</span>' + html : '';
+}
+
+/* A lamp is a switch: it drops its own detail underneath itself, and clicking it again
+   puts the detail away. Anything that opens has to close the same way it opened. */
+const popOn = () => $('#pop').classList.contains('on');
+function popHide(){
+  $('#pop').classList.remove('on');
+  lampAt = null;
+  if (S && S.doctor) drawLamps(S.doctor);
+}
+function lampGo(id){
+  if (lampAt === id && popOn()){ popHide(); return; }
+  popOpen(id);
+}
+function popOpen(id){
+  if (!S || !S.doctor) return;
+  lampAt = id;
+  drawLamps(S.doctor);                       // marks the pressed lamp, rebuilds the rack
+  const st = $('#topst');
+  const anchor = id === '*' ? (st && !st.hidden ? st : $('#rack'))
+                            : document.querySelector(`.lamp[data-id="${id}"]`);
+  if (!anchor) return;
+  id === '*' ? popAll(anchor) : popOne(id, anchor);
+}
+function popAt(el, html, wide){
+  const p = $('#pop');
+  p.innerHTML = html;
+  p.classList.toggle('wide', !!wide);
+  p.classList.add('on');
+  const r = el.getBoundingClientRect(), w = p.offsetWidth;
+  const left = Math.min(Math.max(8, r.left - 10), innerWidth - w - 8);
+  p.style.left = left + 'px';
+  p.style.top = (r.bottom + 7) + 'px';
+  p.style.setProperty('--ax',
+    Math.max(10, Math.min(w - 22, r.left + r.width / 2 - left - 4)) + 'px');
+}
+function popOne(id, anchor){
+  const r = (S.doctor.rows || []).find(x => x.id === id);
+  if (!r) return;
+  const kv = (r.table || []).length
+    ? `<div class="kv">${r.table.map(t => `<i>${esc(t[0])}</i> ${esc(t[1])}${
+        t[2] ? ' · ' + esc(t[2]) : ''}`).join('<br>')}</div>` : '';
+  const read = (r.db !== null && r.db !== undefined)
+    ? `<div class="pv">${r.db} dBFS<em>${esc(loud(r.db))}</em></div>` : '';
+  popAt(anchor, `
+    <div class="ph"><span class="led ${r.state}"></span><b>${esc(r.name)}</b>
+      <span class="f1"></span><span class="tag ${TG[r.state] || ''}">${SW[r.state] || ''}</span></div>
+    <div class="pb">
+      ${LAMPW[r.id] ? `<div class="why">${esc(LAMPW[r.id])}</div>` : ''}
+      ${r.value ? `<div class="pv">${esc(r.value)}</div>` : ''}
+      ${read}${r.note ? `<div class="why">${r.note}</div>` : ''}${kv}
+      <div class="row pfix"></div>
+    </div>
+    <div class="pf"><span class="sub">${esc(r.group || '')}</span><span class="f1"></span>
+      <button class="btn sm" onclick="lampGo('*')">全部明细</button>
+      <button class="btn sm" onclick="levels()">重新检测</button></div>`);
+  if (r.fix) $('#pop .pfix').appendChild(control(r.fix));
+}
+function popAll(anchor){
+  const d = S.doctor || {}, rows = d.rows || [];
+  const bad = rows.filter(r => r.state !== 'ok').length;
+  popAt(anchor, `
+    <div class="ph"><b>检测明细</b>
+      <span class="tag ${bad ? 'gold' : 'green'}">${rows.length ? (bad
+        ? bad + ' / ' + rows.length + ' 待处理' : rows.length + ' 项全部通过') : '—'}</span>
+      <span class="f1"></span>
+      <span class="sub">上次实测 ${d.tested_at ? when(d.tested_at) : '未执行'}</span></div>
+    <div class="pb p0"><div class="tbl" id="rs"></div></div>
+    <div class="pf"><span class="f1"></span>
+      <button class="btn sm" onclick="levels()">重新检测</button></div>`, true);
+  fillTable($('#pop #rs'), d);
+}
+function fillTable(box, d){
+  if (!box) return;
+  box.innerHTML = '';
+  const rows = d.rows || [];
+  const th = document.createElement('div');
+  th.className = 'th';
+  th.innerHTML = '<div></div><div>检测项</div><div>实测值</div><div style="text-align:right">结果</div>';
+  box.appendChild(th);
+  let g = null;
+  rows.forEach(r => {
+    if (r.group && r.group !== g){
+      g = r.group;
+      const n = rows.filter(x => x.group === g);
+      const bad = n.filter(x => x.state !== 'ok').length;
+      const h = document.createElement('div');
+      h.className = 'gr';
+      h.innerHTML = `<span>${esc(g)}</span><span>${n.length} 项 · ${
+        bad ? bad + ' 项待处理' : '全部通过'}</span>`;
+      box.appendChild(h);
+    }
+    box.appendChild(resultRow(r));
+  });
+}
+
+function drawChecks(d){
+  if (!d) return;
+  S.doctor = d;
+  const v = d.verdict || {head:'', sub:''};
+  const vd = $('#vd');
+  vd.className = 'alert ' + (d.state === 'ok' ? '' : d.state);
+  vd.innerHTML = `<div class="ai">${AICON[d.state] || 'i'}</div>
+    <div class="at"><h3>${esc(v.head)}</h3><p>${esc(v.sub)}</p></div>`;
+  vd.hidden = !d.state || d.state === 'ok';
+
+  // On a narrow window this chip IS the lamp rack, so it has to say what the lamps say.
+  // The lamps are the readout. This chip is only for the two states a light cannot
+  // state on its own: nothing tested yet, and a check that actually failed.
+  const t = $('#topst');
+  const rows = d.rows || [], nb = rows.filter(r => r.state === 'fail' || r.state === 'warn');
+  const bad = rows.filter(r => r.state === 'fail');
+  t.hidden = !!(d.tested_at && d.ready);
+  t.textContent = !d.tested_at ? '待检测'
+    : `自检未通过 ${bad.length || nb.length} 项`;
+  t.title = '查看检测明细';
+  t.className = 'tag act ' + (!d.tested_at ? '' : 'red');
+
+  const go = $('#s1go');
+  go.textContent = d.tested_at ? '重新检测' : '执行检测';
+  go.className = d.tested_at ? 'btn' : 'btn pri';
+  $('#c_odbtn').hidden = !(S && S.onedrive && !$('#c_arch').value);
+
+  drawLamps(d);
+  if (popOn() && lampAt) popOpen(lampAt);      // keep an open detail current
+  drawState(); drawFacts();
+}
+
+function resultRow(r){
+  const el = document.createElement('div');
+  el.className = 'tr ' + r.state;
+  el.dataset.id = r.id;
+  const read = r.db !== null && r.db !== undefined
+    ? `${r.db} dBFS<em>${esc(loud(r.db))}</em>` : '';
+  const kv = (r.table || []).length
+    ? `<div class="kv">${r.table.map(t => `<i>${esc(t[0])}</i> ${esc(t[1])}${
+        t[2] ? ' · ' + esc(t[2]) : ''}`).join('<br>')}</div>` : '';
+  el.innerHTML = `<div class="ic">${ICON[r.state] || ''}</div>
+    <div class="nm">${esc(r.name)}${LAMPW[r.id] ? `<em>${esc(LAMPW[r.id])}</em>` : ''}</div>
+    <div class="vl">${esc(r.value || '')}${read ? '<br>' + read : ''}</div>
+    <div class="ac"><span class="tag ${TG[r.state] || ''}">${SW[r.state] || ''}</span></div>${kv}`;
+  const ac = el.querySelector('.ac');
+  // A pending audio row is waiting on the 3-second test, not on a device change, so it does
+  // not get a device picker shoved in front of it. Anything else pending shows its button.
+  const inline = r.state === 'warn' || r.state === 'fail' ||
+    (r.state === 'todo' && r.fix
+     && r.fix.action !== 'pick_mic' && r.fix.action !== 'pick_loopback');
+  if (inline){
+    const ex = document.createElement('div');
+    ex.className = 'ex2';
+    ex.innerHTML = r.note ? `<div class="why">${r.note}</div>` : '';
+    if (r.fix) ex.appendChild(control(r.fix));
+    el.appendChild(ex);
+  } else if (r.fix && (r.fix.action === 'pick_mic' || r.fix.action === 'pick_loopback')){
+    const b = document.createElement('button');
+    b.className = 'btn txt q sm'; b.textContent = '更换设备';
+    b.onclick = () => {
+      b.remove();
+      const ex = document.createElement('div');
+      ex.className = 'ex2';
+      ex.appendChild(control(r.fix));
+      el.appendChild(ex);
+    };
+    ac.appendChild(b);
+  } else if (r.id === 'paths'){
+    const b = document.createElement('button');
+    b.className = 'btn txt q sm'; b.textContent = '修改路径';
+    b.onclick = () => toCfg('#c_stage');
+    ac.appendChild(b);
+  }
+  return el;
+}
+
+/* A device choice is a list, so show the list. */
+function control(f){
+  if (f.action === 'pick_mic' || f.action === 'pick_loopback'){
+    const key = f.action === 'pick_mic' ? 'mic_device' : 'loopback_device';
+    const sel = document.createElement('select');
+    sel.innerHTML = `<option value="">跟随系统默认</option>` +
+      (f.options || []).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    sel.value = S && S.config ? (S.config[key] || '') : '';
+    sel.onchange = async () => {
+      const r = await api('/api/config', {[key]: sel.value});
+      S.config = r.config; drawChecks(r.doctor); fillCfg();
+    };
+    return sel;
+  }
+  const b = document.createElement('button');
+  b.className = 'btn pri sm'; b.textContent = f.label;
+  b.onclick = () => fix(f);
+  return b;
+}
+
+function toCfg(sel){
+  popHide(); go('cfg');
+  const el = $(sel);
+  if (el){ el.scrollIntoView({behavior:'smooth', block:'center'}); el.focus(); }
+}
+
+async function fix(f){
+  if (f.action === 'open'){ window.open(f.url, '_blank'); return; }
+  if (f.action === 'install'){ watch(await api('/api/install', {packages:f.packages})); return; }
+  if (f.action === 'download_model'){ watch(await api('/api/model', {})); return; }
+  if (f.action === 'levels'){ levels(); return; }
+  if (f.action === 'open_dir'){ await api('/api/open', {path:S.config[f.key]}); return; }
+  if (f.action === 'pick_path') toCfg(f.key === 'archive_dir' ? '#c_arch' : '#c_stage');
+}
+
+async function levels(){
+  if (busy) return;
+  busy = true;
+  $('#topst').textContent = '检测中…'; $('#topst').className = 'tag act blue';
+  const vd = $('#vd');
+  vd.hidden = false;
+  vd.className = 'alert busy';
+  vd.innerHTML = `<div class="ai">i</div><div class="at"><h3>正在检测…</h3>
+    <p>逐项检查运行环境与存储，并对两路音频各实测 3 秒（含 440 Hz 测试音）。</p></div>`;
+  try { drawChecks(await api('/api/doctor', {levels:true})); }
+  finally { busy = false; }
+}
+
+/* What is true right now, in the two places that carry it: the card head and the rail. */
+/* Old Python behind new HTML is the one failure that explains a dozen others, so it is
+   named before anything else on the page is believed. */
+function chkBuild(){
+  const be = S.build || null;
+  staleBE = be !== UI_BUILD;
+  const el = $('#oldban');
+  el.hidden = !staleBE;
+  if (staleBE)
+    el.innerHTML = `<b>后端是旧版本，先重启工具。</b>
+      这个页面是 <b>${esc(UI_BUILD)}</b>，正在服务它的 Python 是 <b>${
+        esc(be || '更早的版本（还不会报自己的版号）')}</b>。
+      关掉黑色的「Minutes Desk」窗口，再双击一次
+      <b>Minutes Desk.bat</b>（新版会自己结束旧进程）。
+      在那之前，语音识别、确认、纪要全都会给错的结果。`;
+}
+
+function drawState(){
+  if (!S) return;                    // the 3 s heartbeat can fire before the first load
+  const d = S.doctor || {}, rec = S.recording && S.recording.active;
+  const ready = d.ready === true;
+  const all = S.sessions || [];
+  const local = all.filter(s => s.state !== 'archived');
+  const pend = local.filter(s => !s.has_minutes && s.state !== 'recording');
+
+  $('#prep_h').textContent = rec ? '录制中' : '会议准备';
+  const st = $('#prep_st');
+  st.textContent = rec ? '录制中' : !d.tested_at ? '检测中'
+    : !ready ? '环境未通过' : '待录制';
+  st.className = 'tag' + (rec ? ' red' : (d.tested_at && !ready) ? ' red' : '');
+  $('#prep_sub').textContent = rec ? '' : ready ? '' : '顶栏红色那项处理后即可开始';
+  $('#recgo').disabled = !ready;
+  $('#prep').classList.toggle('now', rec);   // only a live recording earns the accent
+
+  $('#e_hist').textContent = local.length ? local.length + ' 场' : '';
+  $('#e_hist').className = pend.length ? 'w' : '';
+  $('#e_meet').textContent = rec ? '\u25CF 录制中' : '';
+  $('#e_meet').className = 'tag red';
+  $('#e_meet').hidden = !rec;
+  const s0 = ses(cur), skel = s0 && s0.has_minutes && !s0.minutes_written;
+  $('#e_doc').textContent = skel ? '待写' : (s0 && s0.has_minutes) ? '✓' : '';
+  $('#e_doc').className = skel ? 'w' : '';
+}
+
+/* The status bar carries standing facts, so nothing here has to be looked up. */
+function drawFacts(){
+  const c = S.config || {}, d = S.doctor || {};
+  const all = S.sessions || [];
+  const p = (d.rows || []).find(x => x.id === 'paths');
+  const stg = ((p && p.table) || []).find(x => x[0] === '本地暂存');
+  $('#f_free').textContent = stg && stg[2] ? stg[2].replace('剩余 ', '') : '—';
+  $('#f_local').textContent = all.filter(s => s.state !== 'archived').length + ' 场';
+  $('#f_arch').textContent = all.filter(s => s.state === 'archived').length + ' 场';
+  $('#f_test').textContent = d.tested_at ? when(d.tested_at) : '未执行';
+  $('#k_me').textContent = c.me || '未设置';
+  $('#k_model').textContent = c.model || '—';
+  $('#k_video').textContent = c.video ? '开' : '关';
+  $('#k_arch').textContent = c.archive_enabled ? '开' : '关';
+  const sd = c.staging_dir || '';
+  $('#k_stage').textContent = sd.split(/[\\/]/).filter(Boolean).slice(-2).join('/') || '—';
+  $('#k_stage').title = sd;
+}
+
+// =================================================================== settings
+function fillCfg(){
+  const c = S.config;
+  $('#c_me').value = c.me; $('#c_model').value = c.model;
+  $('#c_stage').value = c.staging_dir; $('#c_arch').value = c.archive_dir;
+  $('#c_archen').checked = c.archive_enabled; $('#c_video').checked = c.video;
+  $('#c_vfps').value = c.video_fps; $('#c_vcrf').value = c.video_crf;
+  $('#c_vw').value = c.video_width;
+  if (!$('#r_video').dataset.touched) $('#r_video').checked = c.video;
+}
+function useOneDrive(){
+  if (!S.onedrive){ $('#cfgmsg').textContent = '没检测到已同步的 OneDrive。'; return; }
+  $('#c_arch').value = S.onedrive; $('#c_archen').checked = true;
+}
+async function saveCfg(){
+  const r = await api('/api/config', {
+    me:$('#c_me').value.trim(), model:$('#c_model').value,
+    staging_dir:$('#c_stage').value.trim(), archive_dir:$('#c_arch').value.trim(),
+    archive_enabled:$('#c_archen').checked, video:$('#c_video').checked,
+    video_fps:+$('#c_vfps').value||3, video_crf:+$('#c_vcrf').value||32,
+    video_width:+$('#c_vw').value||1280, setup_done:true});
+  S.config = r.config; drawChecks(r.doctor); fillCfg();
+  $('#cfgmsg').textContent = '已保存 · ' + new Date().toLocaleTimeString();
+}
+
+// =================================================================== attendees
+/* A meeting invite is where the names already are. Two ways in, both ending as chips
+   the user can see and correct: paste the To: line, or read the local calendar. */
+const NOISE = /^(required|optional|attendees?|organizer|from|to|cc|收件人|抄送|与会者|必需|可选|主持人)\s*[:：]?$/i;
+const ROOM = /conf\s*room|meeting\s*room|会议室|\bboard\s*room\b/i;
+
+function oneName(s){
+  s = (s || '').replace(/["']/g, ' ').trim();
+  const m = s.match(/<([^>]*)>/);              // Alex Smith <alex@example.com>
+  if (m){
+    const disp = s.slice(0, s.indexOf('<')).trim();
+    s = disp || m[1].split('@')[0];
+  }
+  s = s.trim().replace(/[;,\s]+$/, '').trim();
+  if (!s || NOISE.test(s) || ROOM.test(s)) return '';
+  if (/@/.test(s)){
+    if (/chime|zoom|webex|teams|pin\+|resource|room/i.test(s)) return '';
+    s = s.split('@')[0].replace(/[._]+/g, ' ').trim();       // alias only
+  }
+  if (/^[a-z0-9][a-z0-9._-]*$/.test(s) && !/\s/.test(s) && s.length > 3
+      && /(directs|team|managers|group|all|list)$/i.test(s)) return '';
+  let nick = '';
+  const p = s.match(/\(([^)]+)\)/);
+  if (p){ nick = p[1].trim(); s = s.replace(/\s*\([^)]*\)/g, '').trim(); }
+  if (s.includes(',')){
+    const i = s.indexOf(',');
+    const last = s.slice(0, i).trim(), first = (nick || s.slice(i + 1)).trim();
+    s = (first + ' ' + last).trim();
+  } else if (nick){
+    const w = s.split(/\s+/);
+    s = (nick + ' ' + (w.length > 1 ? w[w.length - 1] : s)).trim();
+  }
+  s = s.replace(/\s+/g, ' ').trim();
+  return s.length > 1 && s.length < 48 ? s : '';
+}
+
+/* Outlook separates people with ';' and puts the comma inside the name, so a text that
+   has semicolons must not be split on commas as well. */
+function parseNames(txt){
+  const t = (txt || '').replace(/\r/g, '');
+  const parts = /;/.test(t) ? t.split(/[;\n]+/) : t.split(/[,\n\t]+|、/);
+  const out = [], seen = new Set();
+  const me = (S && S.config && S.config.me || '').toLowerCase();
+  parts.forEach(p => {
+    const n = oneName(p);
+    if (!n) return;
+    const k = n.toLowerCase();
+    if (seen.has(k) || (me && k === me)) return;
+    seen.add(k); out.push(n);
+  });
+  return out.slice(0, 40);
+}
+function readAtt(){
+  att = parseNames($('#r_others').value);
+  drawChips();
+}
+function drawChips(){
+  const box = $('#r_chips');
+  box.innerHTML = att.length
+    ? att.map((n, i) => `<span class="chip"><b>${esc(n)}</b><x onclick="dropAtt(${i})"
+        title="移除">\u00d7</x></span>`).join('') + `<span class="n">${att.length} 人</span>`
+    : '';
+}
+function dropAtt(i){
+  att.splice(i, 1);
+  $('#r_others').value = att.join('; ');
+  drawChips();
+}
+
+async function olLoad(){
+  const box = $('#olbox'), b = $('#olgo');
+  const day = ($('#olday').value || '').trim();
+  $('#oldaywrap').hidden = false;          // the date matters only once the list is open
+  box.classList.add('on');
+  box.innerHTML = '<div class="oi"><span class="tm">…</span><b>正在读取 Outlook 日历</b>'
+                + '<span class="n">首次调用需几秒</span></div>';
+  b.disabled = true;
+  let r;
+  try { r = await api('/api/outlook' + (day ? '?day=' + encodeURIComponent(day) : '')); }
+  catch(e){ r = {error:'请求失败：' + e}; }
+  finally { b.disabled = false; }
+  // a 404 body means this build of the page is newer than the running server
+  if (r.error === 'not found'){
+    box.innerHTML = `<div class="oi err"><b>这个功能在运行中的后端里还没有。</b><br>
+      关掉工具窗口，再双击一次 <b>Minutes Desk.bat</b>（改的是 Python 代码，刷新页面不算）。</div>`;
+    return;
+  }
+  if (r.error){ box.innerHTML = `<div class="oi err">${esc(r.error)}</div>`; return; }
+  olm = r.meetings || [];
+  if (!olm.length){
+    box.innerHTML = `<div class="oi"><span class="tm">—</span><b>${
+      esc(r.day || '这一天')} 没有会议</b><span class="n">换个日期再试</span></div>`;
+    return;
+  }
+  box.innerHTML = olm.map((m, i) => `<div class="oi${m.live ? ' now' : ''}" onclick="olPick(${i})">
+    <span class="tm">${esc(m.start.slice(11))}–${esc(m.end.slice(11))}</span>
+    <b>${esc(m.subject)}</b>
+    <span class="n">${m.names.length ? m.names.length + ' 人' : '无与会人'}${
+      m.live ? ' · 进行中' : ''}</span></div>`).join('');
+  const live = olm.findIndex(m => m.live);
+  if (live >= 0 && !$('#r_title').value.trim()) olPick(live);
+}
+function olPick(i){
+  const m = olm && olm[i];
+  if (!m) return;
+  $('#r_title').value = m.subject;
+  $('#r_others').value = m.names.join('; ');
+  readAtt();
+  $('#olbox').classList.remove('on');
+}
+
+// =================================================================== recording
+async function recStart(){
+  const m = $('#recmsg'); m.className = 'msg'; m.textContent = '启动中…';
+  $('#recgo').disabled = true;
+  const r = await api('/api/record/start', {title:$('#r_title').value,
+    others:att.join(', '), video:$('#r_video').checked,
+    sensitive:$('#r_sens').checked});
+  $('#recgo').disabled = false;
+  if (r.error){ m.className = 'msg err'; m.textContent = r.error; return; }
+  m.textContent = '';
+  noAuto = false;                 // the meeting now exists; let it be selected again
+  $('#res').hidden = true;
+  if (!tRec) tRec = setInterval(pollRec, 500);
+}
+async function recCmd(c){ await api('/api/record/cmd', {cmd:c}); }
+async function pollRec(){ drawRec(await api('/api/record/status')); }
+
+const TRACK = {mic:'本端语音（麦克风）', loopback:'对端语音（系统回环）'};
+function drawRec(st){
+  if (!st || !S) return;
+  if (st.session) cur = st.session;
+  const live = st.active;
+  $('#recidle').hidden = live;
+  $('#reclive').hidden = !live;
+  if (!live){
+    if (tRec){ clearInterval(tRec); tRec = null; refresh(0); }
+    drawCur(); drawState();
+    return;
+  }
+  $('#res').hidden = true;
+  $('#l_time').textContent = hms(st.elapsed_s || 0);
+  $('#l_priv').hidden = !st.private;
+  const bm = $('#l_bm');
+  bm.hidden = !st.bookmarks;
+  bm.textContent = (st.bookmarks || 0) + ' 个书签';
+  $('#l_meta').innerHTML = kvrow('会议', $('#r_title').value || '未命名')
+    + (att.length ? kvrow('与会', att.join('、')) : '')
+    + kvrow('目录', st.session || '');
+
+  const box = $('#l_mtrs'); box.innerHTML = '';
+  Object.entries(st.tracks || {}).forEach(([k, v]) => {
+    const pct = Math.max(0, Math.min(100, (v.db + 60) / 60 * 100));
+    const cls = v.db > -1 ? 'clip' : v.db > -6 ? 'hot' : '';
+    const d = document.createElement('div'); d.className = 'mtr';
+    d.innerHTML = `<div class="lb">
+        <span><span class="who">${TRACK[k] || k}</span> · ${esc(v.device)}</span>
+        <span><b>${v.db.toFixed(1)}</b> dBFS · ${v.seconds.toFixed(0)}s</span></div>
+      <div class="trk"><i class="${cls}" style="width:${pct}%"></i></div>`;
+    box.appendChild(d);
+  });
+
+  const vgo = $('#l_vgo');
+  vgo.disabled = !!st.video;
+  vgo.textContent = st.video ? '录屏已开' : '开始录屏';
+  const vd = $('#l_video');
+  vd.innerHTML = st.video
+    ? (st.video.error ? `<span style="color:var(--bad)">录屏失败：${esc(st.video.error)}</span>`
+       : `录屏 ${esc(st.video.size)} · ${st.video.frames} 帧 · ${(st.video.bytes/1e6).toFixed(1)} MB`)
+    : '本场还没录屏 · 需要的时候点右上「开始录屏」，从那一刻开始录';
+  let w = '';
+  if (st.suspends) w += `<div class="note">系统休眠 ${st.suspends} 次，对应时段音频缺失。</div>`;
+  if ((st.endpoint_switches||[]).length)
+    w += `<div class="note">输出设备切换 ${st.endpoint_switches.length} 次，已自动跟随。</div>`;
+  $('#l_warn').innerHTML = w;
+  drawState();
+}
+
+// =================================================================== this meeting
+const kvrow = (k, v) => `<div><i>${esc(k)}</i><b>${esc(v)}</b></div>`;
+const KEY = {'minutes.html':'纪要', 'transcript.md':'逐字稿', 'screen.mp4':'录屏'};
+const url = (s, f) => `/files/${encodeURIComponent(s)}/${encodeURIComponent(f)}`;
+const ses = n => ((S && S.sessions) || []).find(x => x.name === n);
+
+function openMinutes(){ if (!WIDE()) tabGo(3); }
+function openSes(name){
+  cur = name; tabAuto = true; noAuto = false;
+  document.body.classList.remove('sesopen');
+  markOn(); drawCur(); drawState(); go('doc');
+}
+
+/* The meeting that just ended, in the place it was started from: what was captured,
+   then one button that turns it into a document. */
+/* Four stages, named the way they actually behave. Nothing here is inferred from the
+   existence of a file alone: an empty transcript is reported as empty. */
+function stage(s){
+  if (!s) return 0;
+  if (s.lines <= 0) return s.asr === 'done' || s.asr === 'partial' ? 1 : 0;
+  if (!s.confirmed_at) return 2;                 // confirming comes before writing
+  return s.minutes_written ? 4 : 3;
+}
+/* Every step says which of three things it is: done, waiting for you, or not started.
+   "语音识别" on its own told nobody whether it had run. */
+function drawSteps(s){
+  const at = stage(s), run = jobId && jobKind;
+  const asr = run && jobKind === 'asr';
+  const L = [
+    ['录音', s.duration_s ? '已完成 ' + hms(s.duration_s) + (s.tracks ? ' · ' + s.tracks + ' 轨' : '')
+       : '无音频'],
+    ['语音识别', asr ? (flow.sub || '正在转写…')
+       : s.asr === 'done' ? '已完成 · ' + s.asr_segments + ' 段'
+       : s.asr === 'partial' ? '未完成' : '未开始'],
+    ['校对确认', asr ? '待语音识别'
+       : s.confirmed_at ? '已确认 ' + (s.confirmed_at || '').slice(5, 16).replace('T', ' ')
+       : s.lines > 0 ? '待确认' : '未开始'],
+    ['纪要', asr ? '待语音识别'
+       : s.minutes_written ? '已成文' : (s.lines > 0 ? '正文待撰写' : '未开始')],
+  ];
+  // While Analysis runs the later stages step back to "not started": a re-run invalidates
+  // them, and leaving 校对确认 on "待确认" made the flow look like it had not moved.
+  const st = asr ? [s.duration_s > 0 ? 2 : 0, 1, 0, 0] : [
+    s.duration_s > 0 ? 2 : 0,
+    s.asr === 'done' ? 2 : s.asr === 'partial' ? 1 : 0,
+    s.confirmed_at ? 2 : s.lines > 0 ? 1 : 0,
+    s.minutes_written ? 2 : s.lines > 0 ? 1 : 0,
+  ];
+  // The four stages are the navigation: the strip reports the pipeline and is also
+  // how you move through it. Until you click one, it follows the work.
+  if (tabAuto) tab = at <= 1 ? 1 : at === 2 ? 2 : (WIDE() ? 2 : 3);
+  if (WIDE() && tab === 3) tab = 2;
+  $('#res_stp').className = 'stp' + (run ? ' run' : '');
+  $('#res_stp').innerHTML = L.map((x, i) => {
+    const cls = [st[i] === 2 ? 'done' : st[i] === 1 ? 'now' : '',
+                 i === tab ? 'on' : '', (i === 3 && WIDE()) ? 'off' : ''].join(' ').trim();
+    return `<a class="tb ${cls}" onclick="tabGo(${i})" title="${esc(x[0] + ' · ' + x[1])}"><u>${
+      st[i] === 2 ? '\u2713' : st[i] === 1 ? '\u25CF' : '\u25CB'}</u><b>${
+      esc(x[0])}</b><i>${esc(x[1])}</i></a>`;
+  }).join('');
+  panes();
+  // A fault is worth a line. Telling someone what to click next is not.
+  const bad = (!run && at === 1 && s.asr === 'done' && s.lines <= 0)
+    ? '识别已结束，但逐字稿为空：请在「录音」一步核对两路 wav 是否有信号。' : '';
+  $('#res_now').innerHTML = bad;
+  $('#res_now').hidden = !bad;
+}
+
+/* one fact, one box. mono for numbers, sans for names, and the directory gets a wide one */
+function mod(k, v, tx, wide){
+  return `<div class="mod${wide ? ' wide' : ''}"><u>${esc(k)}</u><b class="${
+    tx ? 'tx' : ''}">${esc(v)}</b></div>`;
+}
+function drawCur(){
+  const card = $('#res'), prep = $('#prep'), s = ses(cur);
+  const rec = !!(S && S.recording && S.recording.active);
+  // A live recording, or no meeting at all, and the work column is the recording form:
+  // stage zero of the same pipeline, not a separate screen.
+  if (rec || !s || s.state === 'recording'){ card.hidden = true; prep.hidden = false; return; }
+  card.hidden = false; prep.hidden = true;
+  $('#res_h').textContent = s.title || (S.sessions ? '会议 ' + seqOf(s) : '本场会议');
+  const at = stage(s);
+  const ST = [['待语音识别','blue'], ['待确认','gold'], ['待确认','gold'],
+              ['逐字稿已完成，纪要待撰写','gold'], ['\u2713 纪要已成文','green']];
+  const st = $('#res_st');
+  st.textContent = ST[at][0];
+  st.className = 'tag ' + ST[at][1];
+  drawSteps(s);
+
+  const nAtt = (CF && CF.session === s.name)
+    ? attList().filter(n => att2[n]).length
+    : (s.others || '').split(/[;,]/).filter(x => x.trim()).length;
+  $('#res_meta').innerHTML = mod('开始', when(s.started) || s.name)
+    + mod('时长', s.duration_s ? hms(s.duration_s) : '—')
+    + mod('逐字稿', s.lines ? s.lines + ' 行' : '—')
+    + mod('发言时长', s.lines ? s.speech_min + ' 分钟' : '—')
+    + mod('与会人', nAtt ? nAtt + ' 人' : '—')
+    + mod('录屏', s.has_video ? '有' : '无');
+  $('#res_meta2').innerHTML = mod('音频轨数', (s.tracks || '—') + '')
+    + mod('文件大小', s.mb + ' MB')
+    + mod('目录', s.name, 1, 1);
+
+  const raw = s.files.filter(f => !KEY[f.name]);
+  $('#res_raw').innerHTML = (raw.length ? raw.map(f =>
+      `<a target="_blank" href="${url(s.name, f.name)}">${esc(f.name)}<s>${f.mb} MB</s></a>`
+    ).join('') : '<span class="sub">本场暂无文件</span>')
+    + `<button class="btn txt q sm" onclick="reveal('${
+      esc(s.path).replace(/\\/g,'\\\\')}')">在资源管理器中打开</button>`;
+
+  const out = s.files.filter(f => KEY[f.name]);
+  // Analysis is the heavy step. Whether it is the first run or a re-run, it never looks
+  // like the buttons next to it, because it is the only one that costs minutes.
+  const anago = $('#anago');
+  $('#anat').textContent = s.lines > 0 ? '重新识别' : '语音识别';
+  anago.className = s.lines > 0 ? 'btn ana' : 'btn ana lg';
+  anago.title = s.lines > 0 ? '重新转写两路音频，已有确认结果保留'
+                            : '将两路音频转为逐字稿，约需数分钟';
+  $('#res_open').hidden = !s.has_minutes;
+  $('#res_up').hidden = !(s.state === 'local' && s.has_minutes);
+  // the 3 s heartbeat runs through here: load once per session, then leave it alone,
+  // otherwise a half-answered form would be rebuilt under the cursor
+  if (at >= 1){
+    if (!CF || CF.session !== s.name) loadConfirm(s);
+  } else {
+    CF = null;
+    $('#res_cfm').hidden = true;
+  }
+
+  const acts = [];
+  if (s.has_video)
+    acts.push(`<button class="btn sm" onclick="doFrames('${esc(s.name)}')">提取关键帧${
+      s.frames ? ` · 已有 ${s.frames} 张` : ''}</button>`);
+  if (s.state === 'local' && s.has_minutes && S.config.archive_enabled)
+    acts.push(`<button class="btn sm" onclick="upSes()"><svg class="ic sm"><use href="#i-cloud"/></svg>上传至 OneDrive</button>`);
+  acts.push(`<a class="btn sm" target="_blank" href="/doc/sop">处理 SOP</a>`);
+
+  // the document belongs on this page; a second window is a choice, not the only route
+  const has = n => out.some(f => f.name === n);
+  const outCard = (name, tag, note) => {
+    const f = out.find(x => x.name === name);
+    if (!f) return '';
+    return `<div class="outc"><u>${tag}</u><div class="f1"><b>${KEY[name]}</b>
+      <i>${esc(note)} · ${f.mb} MB</i></div>
+      <a class="btn sm" target="_blank" href="${url(s.name, name)}">新窗口打开</a></div>`;
+  };
+  // the 3 s heartbeat runs through here, so only touch the DOM when something actually
+  // changed: otherwise a card is rebuilt under the cursor on every beat
+  const html = out.length
+    ? `<div class="grp"><u>\u2713</u><h4>产出</h4>
+         <span class="f1"></span>
+         ${has('minutes.html')
+           ? `<button class="btn pri sm" onclick="openMinutes()">查看纪要</button>` : ''}</div>
+       <div class="outs">${
+         outCard('minutes.html', '纪', s.minutes_written ? '正文已写' : '框架已生成，正文待撰写')
+         + outCard('transcript.md', '稿', '逐字稿')
+         + outCard('screen.mp4', '屏', '录屏')}</div>`
+      + `<div class="row" style="margin-top:12px">${acts.join('')}</div>`
+    : `<div class="grp"><u>\u2014</u><h4>产出</h4><i>暂无</i></div>
+       <div class="empty" style="padding:0 0 10px"><b>录制已完成，尚未转写</b>
+         <div class="row" style="margin-top:10px;justify-content:center">
+           <button class="btn ana lg" onclick="doAnalysis()"><svg class="ic"><use href="#i-wave"/></svg>语音识别</button>
+         </div></div>
+       <div class="row" style="margin-top:12px">${acts.join('')}</div>`;
+  if (html !== outHtml){ outHtml = html; $('#res_out').innerHTML = html; }
+  drawDoc();
+}
+let outHtml = null;
+
+/* ============================================================== the document
+   The minutes are the product, so they get their own stop on the left rail. The iframe
+   is rebuilt only when the document itself changes: the heartbeat must never reload a
+   page somebody is in the middle of reading. */
+let docSig = null, docRev = 0, edOn = false, edFile = 'minutes.md', edOrig = '';
+function drawDoc(){
+  if (edOn) return;                            // somebody is typing in it
+  const s = ses(cur);
+  const sig = s ? [s.name, s.has_minutes, s.minutes_written, s.mb, docRev].join('|') : '-';
+  if (sig === docSig) return;
+  docSig = sig;
+  const st = $('#doc_st'), has = !!(s && s.has_minutes);
+  $('#doc_h').textContent = (s && s.title) ? s.title : '\u7eaa\u8981';
+  $('#doc_ed').hidden = !has;
+  $('#doc_rl').hidden = !has;
+  $('#doc_nw').hidden = !has;
+  if (has) $('#doc_nw').href = url(s.name, 'minutes.html');
+  if (!has){
+    st.textContent = '\u65e0'; st.className = 'tag';
+    $('#doc_bd').innerHTML = '<div class="empty"><b>\u6682\u65e0\u7eaa\u8981</b></div>';
+    return;
+  }
+  st.textContent = s.minutes_written ? '\u2713 \u6b63\u6587\u5df2\u5199' : '\u5f85\u649b\u5199\u6b63\u6587';
+  st.className = 'tag ' + (s.minutes_written ? 'green' : 'gold');
+  $('#doc_bd').innerHTML = `<div class="pw">${wrtBar(s)}<iframe class="docf" src="${
+    url(s.name, 'minutes.html')}" title="\u7eaa\u8981"></iframe></div>`;
+}
+
+/* A skeleton full of TBD is not minutes. The bar sits above the paper only while the
+   body is missing, and it says which route is live before it offers a button. */
+function wrtBar(s){
+  if (!s || s.minutes_written) return '';
+  const e = engCur();
+  const tip = e === 'assistant'
+    ? '当前引擎是<b>交给 AI 助手</b>：点「复制提示词」，粘给 AI 助手，再把 AI 助手回的整份内容用「粘回纪要」贴回来。'
+    : '当前引擎是<b>' + ENAME[e] + '</b>：点「生成纪要草稿」，写好后直接出现在这张纸上。';
+  return `<div class="wrt">
+    <div class="w1"><b>正文还没写</b> · ${tip}</div>
+    <div class="row">
+      ${e === 'assistant' ? '' : '<button class="btn pri" onclick="draftGo()">生成纪要草稿</button>'}
+      <button class="btn${e === 'assistant' ? ' pri' : ''}" onclick="promptCopy()">复制提示词</button>
+      <button class="btn" onclick="pasteStart()">粘回纪要</button>
+      <span class="f1"></span><span class="msg" id="wrtmsg"></span>
+    </div></div>`;
+}
+
+/* Reading mode: the columns beside the paper step aside and the paper gets the window. */
+function zenGo(){
+  const on = document.body.classList.toggle('zen');
+  const u = $('#doc_zi');
+  if (u) u.setAttribute('href', on ? '#i-min' : '#i-max');
+  $('#doc_zn').title = on ? '\u9000\u51fa\u6700\u5927\u5316' : '\u6700\u5927\u5316\u9605\u8bfb';
+}
+
+/* A draft nobody can correct is not a draft. The paper swaps for its own source, and
+   saving re-renders the document in place - same file, same pipeline, no second window. */
+async function edStart(f){
+  const s = ses(cur);
+  if (!s || !s.has_minutes) return;
+  edFile = f || 'minutes.md';
+  edOn = true;
+  let txt = '';
+  try {
+    const r = await fetch(url(s.name, edFile) + '?t=' + Date.now());
+    txt = r.ok ? await r.text() : '';
+  } catch(e){ txt = ''; }
+  edOrig = txt;
+  const zh = s.files.some(x => x.name === 'minutes.zh.md');
+  const st = $('#doc_st');
+  st.textContent = '\u7f16\u8f91\u4e2d'; st.className = 'tag blue';
+  $('#doc_bd').innerHTML = `<div class="edw">
+    <div class="edb"><div class="sw">
+      <button class="${edFile === 'minutes.md' ? 'on' : ''}"
+        onclick="edSwap('minutes.md')">\u82f1\u6587\u6b63\u6587</button>${zh
+        ? `<button class="${edFile === 'minutes.zh.md' ? 'on' : ''}"
+        onclick="edSwap('minutes.zh.md')">\u4e2d\u6587\u6b63\u6587</button>` : ''}
+      </div><span class="f1"></span><span class="sub" id="ed_msg"></span>
+      <button class="btn" onclick="edCancel()">\u53d6\u6d88</button>
+      <button class="btn pri" onclick="edSave()">\u4fdd\u5b58\u5e76\u91cd\u6392</button></div>
+    <textarea id="ed_tx" spellcheck="false"></textarea></div>`;
+  const e = $('#ed_tx');
+  e.value = txt;
+  e.focus();
+}
+const edDirty = () => { const e = $('#ed_tx'); return !!e && e.value !== edOrig; };
+function edSwap(f){
+  if (edDirty() && !confirm('\u672a\u4fdd\u5b58\u7684\u4fee\u6539\u5c06\u4e22\u5f03\uff0c\u7ee7\u7eed\uff1f')) return;
+  edStart(f);
+}
+function edCancel(){
+  if (edDirty() && !confirm('\u653e\u5f03\u672a\u4fdd\u5b58\u7684\u4fee\u6539\uff1f')) return;
+  edOn = false; docSig = null; drawDoc();
+}
+async function edSave(){
+  const s = ses(cur), e = $('#ed_tx'), m = $('#ed_msg');
+  if (!s || !e) return;
+  m.textContent = '\u6b63\u5728\u4fdd\u5b58\u2026';
+  const r = await api('/api/minutes', {session:s.name, file:edFile, text:e.value});
+  if (r.error){ m.textContent = ''; alert(r.error); return; }
+  edOrig = e.value;
+  edOn = false; docSig = null; docRev++;
+  drawDoc();
+  refresh(0);
+}
+function docReload(){ docRev++; drawDoc(); }
+
+/* ============================================================ the minutes engine
+   A transcript is evidence; the body of the minutes is a judgement, and something has
+   to make it. Three routes, one live at a time: hand the prompt to an assistant that is
+   already on this machine, call an OpenAI-shaped endpoint, or run a model locally. Two
+   of the three never send the transcript anywhere, and the card says so out loud. */
+let E = null;
+const ENAME = {assistant:'交给 AI 助手', api:'自带 API', ollama:'本机 Ollama'};
+const engCur = () => (E && E.engine) || (S && S.config && S.config.engine) || 'assistant';
+const LOCALRE = /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\])(:|\/|$)/i;
+
+async function cp(s){
+  try { await navigator.clipboard.writeText(s); return true; }
+  catch(e){
+    // a page served over plain http may not have the clipboard api; the old way still works
+    try {
+      const a = document.createElement('textarea');
+      a.value = s; a.style.position = 'fixed'; a.style.opacity = '0';
+      document.body.appendChild(a); a.select();
+      const ok = document.execCommand('copy');
+      a.remove(); return ok;
+    } catch(e2){ return false; }
+  }
+}
+
+async function engLoad(re){
+  E = await api('/api/engine');
+  engDraw();
+  docSig = null; drawDoc();
+  const m = $('#engmsg');
+  if (re && m) m.textContent = '已重新检测 · ' + new Date().toLocaleTimeString();
+}
+
+function engDraw(){
+  const w = $('#engw');
+  if (!w || !E) return;
+  // never wipe out something the user is halfway through typing
+  const keep = {};
+  ['c_apibase','c_apimodel','c_apikey','c_olmodel'].forEach(k => {
+    const el = $('#' + k); if (el) keep[k] = el.value; });
+  const cur = engCur(), pr = E.presets || {}, L = E.local || {};
+  const on = k => k === cur ? ' on' : '';
+  const chips = ['openai','azure','deepseek','qwen'].filter(k => pr[k]).map(k =>
+    `<button class="btn sm" onclick="engFill('${k}')">${esc(pr[k].label)}</button>`).join('');
+  const mods = E.ollama_models || [], rec = L.model || '';
+  const oll = !E.ollama_installed ? '<span class="tag">未安装</span>'
+    : !E.ollama_running ? '<span class="tag gold">已安装，未运行</span>'
+    : `<span class="tag green">运行中 · ${mods.length} 个模型</span>`;
+
+  w.innerHTML = `
+  <div class="eno${on('assistant')}">
+    <div class="eh" onclick="engPick('assistant')"><u></u><b>交给 AI 助手</b>
+      ${E.assistant ? '<span class="tag green">已检测到 '
+                        + esc(E.assistant) + '</span>'
+                    : '<span class="tag green">无需安装</span>'}
+      <i>不联网、不装模型，逐字稿不出这台电脑</i></div>
+    <div class="eb">
+      <div class="hint">这条路就是复制粘贴：工具把逐字稿和模板拼成一段提示词，你交给 AI 助手，
+        AI 助手写好整份正文，你再贴回来。工具本身不发生任何网络请求。</div>
+      <ol class="est">
+        <li>在右边「纪要」那一栏点<b>复制提示词</b></li>
+        <li>粘给 AI 助手，等它回一份完整的 minutes.md</li>
+        <li>回到「纪要」那一栏点<b>粘回纪要</b>，贴进去即成文</li>
+      </ol>
+    </div>
+  </div>
+  <div class="eno${on('api')}">
+    <div class="eh" onclick="engPick('api')"><u></u><b>自带 API</b>
+      ${E.api_key_set ? '<span class="tag green">密钥已保存</span>' : ''}
+      <i>任何兼容 OpenAI 的接口都行</i></div>
+    <div class="eb">
+      <div class="hint">OpenAI、Azure OpenAI、DeepSeek、通义千问，或者公司自己的网关，
+        都是同一种接口。填地址、模型名、密钥三项即可。</div>
+      <div class="epr"><b>快速填入</b>${chips}</div>
+      <div class="g3">
+        <div class="fitem"><label for="c_apibase">接口地址<i>以 /v1 结尾</i></label>
+          <input type="text" id="c_apibase" oninput="engAckShow()"
+                 placeholder="https://api.openai.com/v1"></div>
+        <div class="fitem"><label for="c_apimodel">模型名</label>
+          <input type="text" id="c_apimodel" placeholder="gpt-4o-mini"></div>
+        <div class="fitem"><label for="c_apikey">密钥<i>只写在本机 config.json</i></label>
+          <input type="password" id="c_apikey" placeholder="sk-…"></div>
+      </div>
+      <div class="row" style="margin-top:11px">
+        <button class="btn" onclick="engTest()">测试连接</button>
+        <span class="sub">会真的发一次极短的请求，地址、模型名、密钥错在哪都能看出来</span>
+      </div>
+      <div class="note" id="engack" hidden>
+        <label class="chk"><input type="checkbox" id="c_apiack">
+          <span>可以把会议内容发给这个服务</span></label>
+        <div style="margin-top:7px">这个地址不在本机。生成草稿会把整份逐字稿发过去，
+          包括与会人姓名和会上说过的每句话。请先确认它符合公司对会议内容的处理要求。</div>
+      </div>
+    </div>
+  </div>
+  <div class="eno${on('ollama')}">
+    <div class="eh" onclick="engPick('ollama')"><u></u><b>本机 Ollama</b>${oll}
+      <i>模型跑在这台电脑上，同样不出本机</i></div>
+    <div class="eb">
+      <div class="hint">这台电脑内存 ${L.ram_gb || '?'} GB。${rec
+        ? `建议用 <b>${esc(rec)}</b>（${esc(L.why || '')}）。`
+        : '内存偏小，本地模型会很慢，建议走上面两条路。'}</div>
+      ${E.ollama_installed ? '' : `<div class="row" style="margin-top:11px">
+        <button class="btn" onclick="engCmd('winget install Ollama.Ollama')">复制安装命令</button>
+        <span class="sub">在 PowerShell 里粘贴执行，装完回来点「重新检测」</span></div>`}
+      ${rec ? `<div class="row" style="margin-top:9px">
+        <button class="btn" onclick="engCmd('ollama pull ${esc(rec)}')">复制下载模型命令</button>
+        <span class="sub">约 5-9 GB，只需下载一次</span></div>` : ''}
+      <div class="fitem" style="margin-top:11px"><label for="c_olmodel">用哪个模型</label>
+        ${mods.length
+          ? `<select id="c_olmodel">${mods.map(m =>
+              `<option value="${esc(m)}">${esc(m)}</option>`).join('')}</select>`
+          : `<input type="text" id="c_olmodel"
+                    placeholder="${esc(rec || 'qwen2.5:7b-instruct')}">`}</div>
+      <div class="row" style="margin-top:11px">
+        <button class="btn" onclick="engTest()">测试连接</button>
+        <span class="sub">Ollama 必须已经在运行</span>
+      </div>
+    </div>
+  </div>`;
+
+  const set = (k, v) => { const el = $('#' + k); if (el) el.value = v == null ? '' : v; };
+  set('c_apibase', keep.c_apibase != null ? keep.c_apibase : (E.api_base || ''));
+  set('c_apimodel', keep.c_apimodel != null ? keep.c_apimodel : (E.api_model || ''));
+  set('c_apikey', keep.c_apikey || '');
+  const om = $('#c_olmodel');
+  if (om){
+    const want = keep.c_olmodel || E.ol_model || rec || '';
+    if (om.tagName === 'SELECT'){ if (mods.indexOf(want) >= 0) om.value = want; }
+    else om.value = want;
+  }
+  const kp = $('#c_apikey');
+  if (kp && E.api_key_set && !kp.value) kp.placeholder = '已保存，留空则不改动';
+  const ac = $('#c_apiack');
+  if (ac) ac.checked = !!E.api_ack;
+  engAckShow();
+  if (lang === 'en') trAll(w);
+}
+
+/* Asked once, and only when it applies: an endpoint on this machine sends nothing out. */
+function engAckShow(){
+  const box = $('#engack'), b = $('#c_apibase');
+  if (!box) return;
+  const v = (b ? b.value : '').trim();
+  box.hidden = !v || LOCALRE.test(v);
+}
+
+async function engPick(e){
+  if (!E || e === engCur()) return;
+  E.engine = e;
+  engDraw();
+  const r = await api('/api/config', {engine:e});
+  if (r.config) S.config = r.config;
+  const m = $('#engmsg');
+  if (m) m.textContent = '已切换到「' + ENAME[e] + '」';
+  docSig = null; drawDoc();
+}
+
+function engFill(k){
+  const p = (E.presets || {})[k];
+  if (!p) return;
+  const b = $('#c_apibase'), m = $('#c_apimodel'), key = $('#c_apikey');
+  if (b) b.value = p.base || '';
+  if (m) m.value = p.model || '';
+  engAckShow();
+  if (key && !key.value) key.focus();
+}
+
+function engBody(){
+  const b = {engine:engCur()};
+  const eb = $('#c_apibase'), em = $('#c_apimodel'), ek = $('#c_apikey'),
+        eo = $('#c_olmodel'), ac = $('#c_apiack');
+  if (eb) b.api_base = eb.value.trim();
+  if (em) b.api_model = em.value.trim();
+  if (ek && ek.value) b.api_key = ek.value.trim();
+  if (eo) b.ol_model = eo.value.trim();
+  if (ac) b.api_ack = ac.checked;
+  return b;
+}
+
+async function engSave(){
+  const m = $('#engmsg'), k = $('#c_apikey');
+  const r = await api('/api/config', engBody());
+  if (r.config) S.config = r.config;
+  if (k) k.value = '';
+  await engLoad(0);
+  const m2 = $('#engmsg');
+  if (m2) m2.textContent = '已保存 · ' + new Date().toLocaleTimeString();
+}
+
+async function engTest(){
+  const m = $('#engmsg'), o = $('#engout');
+  if (m) m.textContent = '正在测试…';
+  if (o) o.hidden = true;
+  const r = await api('/api/engine/test', engBody());
+  if (m) m.textContent = r.ok ? '连接正常' : '连接失败';
+  if (o){
+    o.hidden = false;
+    o.textContent = (r.ok ? '通了：' : '没通：') + (r.detail || '')
+      + (r.reply ? ' · 模型回了「' + r.reply + '」' : '');
+  }
+}
+
+async function engCmd(s){
+  const ok = await cp(s), m = $('#engmsg');
+  if (m) m.textContent = ok ? '已复制：' + s : '复制失败，命令是 ' + s;
+}
+
+/* ---- the three ways to fill the body ------------------------------------------ */
+
+async function promptCopy(){
+  const s = ses(cur), m = $('#wrtmsg');
+  if (!s) return;
+  if (m) m.textContent = '正在准备…';
+  const r = await api('/api/prompt?session=' + encodeURIComponent(s.name));
+  if (r.error){ if (m) m.textContent = ''; alert(r.error); return; }
+  const ok = await cp(r.text);
+  if (m) m.textContent = ok
+    ? `已复制 ${Math.round(r.chars / 1000)}k 字 · 约 ${r.tokens_est} tokens，粘给 AI 助手 即可`
+    : '复制失败，请改用「编辑正文」手工处理';
+}
+
+/* Pasting back is the same box as editing, with the source it is waiting for named. */
+function pasteStart(){
+  const s = ses(cur);
+  if (!s) return;
+  edOn = true;
+  const st = $('#doc_st');
+  st.textContent = '等待粘贴'; st.className = 'tag blue';
+  $('#doc_bd').innerHTML = `<div class="edw">
+    <div class="edb"><span class="sub">把 AI 助手回的整份内容粘进来，从第一行的 --- 开始</span>
+      <span class="f1"></span><span class="sub" id="ps_msg"></span>
+      <button class="btn" onclick="pasteEnd()">取消</button>
+      <button class="btn pri" onclick="pasteGo(0)">写入并成文</button></div>
+    <textarea id="ps_tx" spellcheck="false"></textarea></div>`;
+  $('#ps_tx').focus();
+}
+function pasteEnd(){ edOn = false; docSig = null; drawDoc(); }
+async function pasteGo(force){
+  const s = ses(cur), e = $('#ps_tx'), m = $('#ps_msg');
+  if (!s || !e) return;
+  m.textContent = '正在写入…';
+  const r = await api('/api/minutes/paste',
+    {session:s.name, file:'minutes.md', text:e.value, force:!!force});
+  if (r.error){
+    m.textContent = '';
+    const pb = r.problems || [];
+    if (pb.length){
+      if (confirm(r.error + '：\n\n' + pb.map(x => '· ' + x).join('\n')
+                  + '\n\n仍然按原样写入？')) return pasteGo(1);
+    } else alert(r.error);
+    return;
+  }
+  edOn = false; docSig = null; docRev++;
+  drawDoc(); refresh(0);
+}
+
+/* A cloud model answers in half a minute; a 7B on a laptop cpu can take eight. So this
+   is a job with a log, like transcription, not a request the page sits and waits on. */
+async function draftGo(){
+  const s = ses(cur), m = $('#wrtmsg');
+  if (!s) return;
+  if (m) m.textContent = '正在启动…';
+  jobKind = 'draft';
+  flow = {sub:'正在启动…', t0:Date.now(), step:1, of:2};
+  pgShow('生成纪要草稿', '正在启动…');
+  ban('busy', '正在生成纪要草稿',
+      '模型要读完整份逐字稿才动笔：云端约 20-60 秒，本机模型可能几分钟。'
+      + '进度和报错都在上方的「查看日志」里。');
+  watch(await api('/api/minutes/draft', {session:s.name, file:'minutes.md'}), '#jlog');
+}
+
+async function doAnalysis(){
+  if (!cur) return;
+  const s = ses(cur);
+  if (s && s.lines > 0 &&
+      !confirm('将从头重新转写两路音频，需数分钟。是否继续？')) return;
+  // the four chips are the progress display, so start moving them before the request
+  jobKind = 'asr';
+  flow = {sub:'正在启动…', t0:Date.now(), step:1, of:3};
+  pgShow('语音识别', '正在启动…');
+  drawSteps(s || {duration_s:0});
+  ban('busy', '正在语音识别',
+      '两路音频分别转写，28 分钟的会议约需 6-10 分钟。进度见上方四个阶段；'
+      + '可关闭页面，任务在后台继续。');
+  watch(await api('/api/process', {session:cur, retranscribe:!!(s && s.lines > 0)}), '#jlog');
+}
+/* the progress panel: one line of state next to the chips, the log folded behind it */
+let flow = {sub:'', t0:0, step:0, of:0}, pgOpen = false;
+function pgShow(t, sub){
+  $('#res_prog').hidden = false;
+  $('#pg_t').textContent = t;
+  $('#pg_s').textContent = sub || '';
+  $('#jlog').hidden = !pgOpen;
+  $('#pg_lg').textContent = pgOpen ? '收起日志' : '查看日志';
+}
+function pgLog(){ pgOpen = !pgOpen; pgShow($('#pg_t').textContent, $('#pg_s').textContent); }
+/* _chain.py prints "--- step i/N: <script>"; that is the real phase, so read it rather
+   than inventing a percentage */
+const PHASE = {'asr.py':'转写音频', 'build.py':'整理逐字稿', 'report.py':'生成事实清单',
+               'finalize.py':'收尾', 'llm.py':'让模型写正文'};
+function pgFeed(j){
+  const lines = j.lines || [];
+  let phase = '', step = 0, of = 0, last = '';
+  lines.forEach(l => {
+    const m = /^--- step (\d+)\/(\d+): (\S+)/.exec(l);
+    if (m){ step = +m[1]; of = +m[2]; phase = PHASE[m[3]] || m[3]; return; }
+    const t = l.trim();
+    if (t && !t.startsWith('$ ') && !t.startsWith('---')) last = t;
+  });
+  flow.step = step; flow.of = of;
+  flow.sub = phase ? (of > 1 ? `${phase}（${step}/${of}）` : phase) : (flow.sub || '正在启动…');
+  const el = Math.round((Date.now() - flow.t0) / 1000);
+  $('#pg_e').textContent = `${Math.floor(el / 60)}:${String(el % 60).padStart(2, '0')}`;
+  const lb = j.label || '';
+  pgShow(lb.startsWith('生成纪要草稿') ? '正在生成纪要草稿'
+         : lb.startsWith('生成') ? '正在生成文档' : '正在语音识别',
+         flow.sub + (last ? ' · ' + last.slice(0, 90) : ''));
+}
+
+/* ============================================================== confirm
+   The machine asks; the person who was in the meeting answers; only then is anything
+   written. Right here, on this screen, not in a separate window. */
+let cfDirty = {};
+function cfEdit(k){ cfDirty[k] = true; if (k === 'others') drawConfirm(); }
+async function loadConfirm(s){
+  const box = $('#res_cfm');
+  const same = CF && CF.session === s.name;
+  const r = await api('/api/confirm?session=' + encodeURIComponent(s.name));
+  if (r.error === 'not found'){
+    box.hidden = false;
+    box.innerHTML = `<div class="alert fail"><div class="ai">!</div><div class="at">
+      <h3>后端是旧版本</h3><p>关掉工具窗口，再双击一次 Minutes Desk.bat。</p></div></div>`;
+    return;
+  }
+  if (r.error){ box.hidden = true; return; }
+  CF = r;
+  if (!same){                        // a refresh must never eat your answers
+    picks = {}; cfDirty = {}; att2 = {}; acks = {}; attAdd = []; ren = {}; editAtt = null;
+    qOpen = {}; custAt = null;
+  }
+  (r.pairs || []).forEach(p => {
+    if (!(p.key in picks) && p.decided !== null && p.decided !== undefined)
+      picks[p.key] = typeof p.decided === 'string' && p.decided ? p.decided : !!p.decided;
+  });
+  box.hidden = false;
+  drawConfirm();
+  if (!(r.attendees || []).length && invTried !== s.name){
+    invTried = s.name;                 // the invite has the names; ask for it once
+    pullInvite();
+  }
+}
+let invTried = null;
+function drawConfirm(){
+  if (!CF) return;
+  if (!cfDirty.title) $('#c_title').value = CF.title || '';
+  $('#c_sens').checked = !!CF.sensitive;
+
+  // group 1 - who was in the room. The invite is the starting list; the person who sat
+  // in the meeting is the only one who knows who actually turned up.
+  const all = attList();
+  all.forEach(n => { if (!(n in att2)) att2[n] = attOn(n); });
+  $('#c_att').innerHTML = all.length
+    ? all.map(n => n === editAtt
+        ? `<div class="ae"><input type="text" id="c_ren" value="${esc(nameOf(n))}"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();renDone()}
+                        if(event.key==='Escape')renOff()">
+           <button class="btn sm pri" onclick="renDone()">保存</button>
+           <button class="btn txt sm" onclick="renOff()">取消</button></div>`
+        : `<div class="ar"><label class="${att2[n] ? 'on' : ''}"><input type="checkbox"
+             ${att2[n] ? 'checked' : ''} onchange="togAtt(${jq(n)})">
+             <span>${esc(nameOf(n))}</span>${talkOf(nameOf(n))}</label>
+           <b class="ed" title="更正该姓名的拼写" onclick="renOn(${jq(n)})">更正</b></div>`).join('')
+    : '<span class="sub">暂无名单。可点击右侧「从 Outlook 读取邀请」，或在下方补充。</span>';
+  const on = all.filter(n => att2[n]).length;
+  $('#c_ahint').innerHTML = all.length
+    ? `纪要与会人为已勾选的 <b>${on}</b> 人${CF.talk_time_s ? ' · 音频为本端、对端两轨，' +
+        '三人以上不标注发言人' : ''}`
+    : '';
+  if (editAtt !== null){ const e = $('#c_ren'); if (e) e.focus(); }
+  if (custAt !== null){ const e = $('#c_cust'); if (e){ e.focus(); e.select(); } }
+
+  // group 2 - the words the glossary is unsure about. Read as a substitution, decided by
+  // three buttons, and the sentence it was heard in expands to the turns around it.
+  const ps = CF.pairs || [];
+  $('#c_qwrap').hidden = !ps.length;
+  const und = ps.filter(x => picks[x.key] === undefined).length;
+  $('#c_qn').textContent = ps.length
+    ? (und ? `待确认 ${und} / ${ps.length} 项` : `已全部确认 ${ps.length} 项`) : '';
+  $('#c_qn').className = 'tag ' + (und ? 'gold' : 'green');
+  $('#c_qz').className = 'qz' + (ps.length && !und ? ' allset' : '');
+  $('#c_qz').innerHTML = ps.map((x, i) => {
+    const v = picks[x.key];
+    const cust = typeof v === 'string' && v;
+    const cls = cust ? 'cust' : v === true ? 'yes' : v === false ? 'no' : '';
+    const to = cust ? v : x.canon;
+    const stt = cust ? '\u2713 已改写' : v === true ? (x.applied ? '\u2713 已替换' : '\u2713 将替换')
+      : v === false ? '\u2713 保留原文' : '待确认';
+    const ctrl = custAt === i
+      ? `<div class="qc"><input type="text" id="c_cust" value="${esc(cust || x.canon)}"
+           placeholder="正确写法" onkeydown="if(event.key==='Enter'){event.preventDefault();
+             custDone()} if(event.key==='Escape')custOff()">
+         <button class="btn sm pri" onclick="custDone()">用这个</button>
+         <button class="btn txt sm" onclick="custOff()">取消</button></div>`
+      : `<div class="sw">
+           <button class="${v === true ? 'on' : ''}" onclick="pickQ(${i},1)"
+             >采用 ${esc(x.canon)}</button>
+           <button class="${v === false ? 'on x' : ''}" onclick="pickQ(${i},0)"
+             >保留原文</button>
+           <button class="o3 ${cust ? 'on' : ''}" onclick="custOn(${i})"
+             title="两个都不对时，直接填正确写法">${cust ? '已改为 ' + esc(cust) : '都不对'}</button>
+         </div>`;
+    return `<div class="qi ${cls}">
+      <div class="q">
+        <div class="qh"><code>${esc(x.surface)}</code><s>&#8594;</s>
+          <code class="to">${esc(to)}</code>
+          <span class="n">${x.count || 1} 处</span><span class="stt">${stt}</span></div>
+        ${ctxHtml(x, i, v)}
+      </div>${ctrl}</div>`;
+  }).join('');
+
+  // group 3 - everything else the machine noticed. Visible until it is ticked.
+  const its = CF.issues || [];
+  its.forEach(it => { if (!(it.id in acks)) acks[it.id] = !!it.ack; });
+  $('#c_iwrap').hidden = !its.length;
+  const left = its.filter(it => !acks[it.id]).length;
+  $('#c_in').textContent = its.length ? (left ? left + ' 项待确认' : '已全部确认') : '';
+  $('#c_in').className = 'tag ' + (left ? 'gold' : 'green');
+  $('#c_iz').innerHTML = its.map(it => `<div class="ii ${it.level}${acks[it.id] ? ' on' : ''}">
+    <input type="checkbox" ${acks[it.id] ? 'checked' : ''}
+      onchange="togAck('${esc(it.id)}')" title="勾选表示已确认">
+    <div><b>${esc(it.title)}<span class="lv">${it.level === 'warn' ? '需确认' : '仅告知'}
+      </span></b><p>${esc(it.detail)}</p>
+      <em class="act">${esc(it.act || '无需处理，仅供备查。')}</em></div></div>`).join('');
+
+  // the button says what is left, and still lets it through
+  const rest = und + left;
+  const go = $('#c_go');
+  go.textContent = rest ? `仍有 ${rest} 项未确认，继续生成` : '确认无误，生成纪要';
+  go.className = rest ? 'btn lg' : 'btn pri lg';
+  $('#c_msg').textContent = und ? `未确认的 ${und} 项将按「保留原文」处理` : '';
+}
+
+/* group 1 keeps three separate facts: who is on the list, who actually came (att2), and
+   how each name is spelt (ren). Mixing them into one text box is what made this
+   ambiguous - a name left in the box while its tick was off looked like it would still
+   land in the minutes. */
+let att2 = {}, acks = {}, attAdd = [], ren = {}, editAtt = null;
+const jq = n => JSON.stringify(n).replace(/"/g, '&quot;');
+const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+function attList(){
+  const out = ((CF && CF.attendees) || []).map(a => a.name);
+  attAdd.forEach(n => { if (!out.some(x => same(x, n))) out.push(n); });
+  return out;
+}
+function nameOf(n){ return ren[n] || n; }
+function addAtt(){
+  const el = $('#c_add');
+  const add = parseNames(el.value);
+  if (!add.length) return;
+  const have = attList();
+  add.forEach(n => {
+    const hit = have.find(x => same(nameOf(x), n) || same(x, n));
+    if (hit){ att2[hit] = true; }                 // already listed: just tick it
+    else { attAdd.push(n); att2[n] = true; }
+  });
+  el.value = '';
+  drawConfirm();
+  $('#c_ahint').innerHTML += ` · 已新增 ${add.length} 人`;
+}
+function renOn(n){ editAtt = n; drawConfirm(); }
+function renOff(){ editAtt = null; drawConfirm(); }
+function renDone(){
+  const el = $('#c_ren'), v = el ? el.value.trim() : '';
+  if (v && editAtt !== null && v !== nameOf(editAtt)) ren[editAtt] = v;
+  editAtt = null;
+  drawConfirm();
+}
+/* Whether a name was heard with a letter missing is not answerable from a clipped fragment.
+   Collapsed, this is the sentence it was heard in; expanded, it is that sentence with the
+   turn before and after it, at every place the word occurs. */
+function ctxHtml(x, i, v){
+  const w = x.where || [];
+  if (!w.length) return x.sample ? `<div class="ctx"><div class="one">${
+    hiWord(x.sample, x, v)}</div></div>` : '';
+  const line = (cls, spk, at, t) => t
+    ? `<div class="cl ${cls}"><u>${at === null ? '' : ts(at)}${spk ? ' ' + esc(spk) : ''}</u>
+       <span>${hiWord(t, x, v)}</span></div>` : '';
+  if (!qOpen[i]){
+    const h = w[0];
+    return `<div class="ctx"><div class="cl h"><u>${ts(h.at)}${
+        h.spk ? ' ' + esc(h.spk) : ''}</u><span class="one">${hiWord(h.snip || h.text, x, v)}</span></div>
+      </div><button class="btn txt sm more" onclick="qMore(${i})">展开上下文${
+        w.length > 1 ? `（共 ${w.length} 处）` : ''}</button>`;
+  }
+  const body = w.map((h, k) => (k ? `<div class="sep">第 ${k + 1} 处</div>` : '')
+    + line('o', h.pre_spk, null, h.pre)
+    + line('h', h.spk, h.at, h.text)
+    + line('o', h.post_spk, null, h.post)).join('');
+  return `<div class="ctx">${body}</div>
+    <button class="btn txt sm more" onclick="qMore(${i})">收起上下文</button>`;
+}
+const ts = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+/* The word in question, marked inside its own sentence. Once a decision is made the mark
+   shows the decision: the sentence as it will be written, not the sentence as it was
+   heard. A tick in a button strip is not an answer if the text never changes. */
+function hiWord(txt, x, v){
+  const cust = typeof v === 'string' && v;
+  const cls = cust ? 'cust' : v === true ? 'yes' : v === false ? 'no' : '';
+  // The sentence always shows the form that will be written. Keeping the original means
+  // nothing changes, so that word is left as plain prose - the same colour and weight as
+  // the words beside it, because that is what "keep" looks like on the page. A
+  // replacement is a change, so the new word is marked; undecided is marked because it
+  // is still an open question.
+  const src = x.applied ? x.canon : x.surface;
+  const out = cust ? cust : v === true ? x.canon : v === false ? x.surface : '';
+  const t = esc(txt), q = esc(src).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!q) return t;
+  const re = new RegExp(q, 'gi'), o = esc(out);
+  if (v === false) return t.replace(re, m => o || m);
+  const sw = out && out.toLowerCase() !== src.toLowerCase();
+  return t.replace(re, m => `<mark class="${cls}"${
+    out ? ` title="将写作 ${o}"` : ''}>${sw ? o : m}</mark>`);
+}
+function attOn(n){
+  const a = (CF && CF.attendees || []).find(x => x.name === n);
+  return a ? !!a.on : true;
+}
+function talkOf(n){
+  const t = (CF && CF.talk_time_s) || {};
+  const k = Object.keys(t).find(x => x.toLowerCase() === n.toLowerCase());
+  return k ? `<s>${Math.round(t[k] / 60)} 分钟</s>` : '';
+}
+function togAtt(n){ att2[n] = !att2[n]; drawConfirm(); }
+function togAck(id){ acks[id] = !acks[id]; drawConfirm(); }
+
+/* The invite has the right spelling of every name; memory does not. */
+async function pullInvite(){
+  const b = $('#c_inv'), was = b.textContent;
+  b.disabled = true; b.textContent = '正在读取…';
+  let r;
+  try { r = await api('/api/invite?session=' + encodeURIComponent(cur)); }
+  catch(e){ r = {error:'请求失败：' + e}; }
+  b.disabled = false; b.textContent = was;
+  if (r.error){ $('#c_ahint').innerHTML = `<span style="color:var(--bad)">${esc(r.error)}</span>`; return; }
+  if (!(r.names || []).length){
+    $('#c_ahint').textContent = r.note || '日历中未找到对应会议';
+    return;
+  }
+  const have = attList();
+  r.names.forEach(n => {
+    const hit = have.find(x => same(x, n));
+    if (hit){ if (!(hit in att2)) att2[hit] = true; }
+    else { attAdd.push(n); att2[n] = true; }
+  });
+  drawConfirm();
+  $('#c_ahint').textContent = `已从「${r.matched}」${r.slot ? '（' + r.slot + '）' : ''
+    }读取 ${r.names.length} 人，请取消未到场者的勾选`;
+}
+
+/* Three answers, not two. "Neither" used to be a dead end: the heard form was wrong and
+   the proposal was wrong too, and there was nowhere to put the right one. */
+let qOpen = {}, custAt = null;
+function pickQ(i, yes){
+  const p = CF && CF.pairs && CF.pairs[i];
+  if (!p) return;
+  picks[p.key] = !!yes;
+  custAt = null;
+  drawConfirm();
+}
+function custOn(i){ custAt = i; drawConfirm(); }
+function custOff(){ custAt = null; drawConfirm(); }
+function custDone(){
+  const el = $('#c_cust'), v = el ? el.value.trim() : '';
+  const p = CF && CF.pairs && CF.pairs[custAt];
+  if (p) picks[p.key] = v || false;      // emptied on purpose = keep what was heard
+  custAt = null;
+  drawConfirm();
+}
+function qMore(i){ qOpen[i] = !qOpen[i]; drawConfirm(); }
+async function doConfirm(){
+  if (!cur) return;
+  $('#c_go').disabled = true;
+  const acc = {};
+  (CF && CF.pairs || []).forEach(p => {
+    const v = picks[p.key];
+    acc[p.key] = typeof v === 'string' && v ? v : v === true;   // string = the typed form
+  });
+  const keep = attList().filter(n => att2[n]).map(nameOf);
+  ban('busy', '正在生成文档', '按确认结果重建逐字稿，随后渲染纪要与 HTML，约数秒。');
+  jobKind = 'doc';
+  const r = await api('/api/confirm', {session:cur, title:$('#c_title').value,
+    attendees:keep, others:keep.join('; '), sensitive:$('#c_sens').checked,
+    accept:acc, ack:acks});
+  $('#c_go').disabled = false;
+  watch(r, '#jlog');
+}
+function ban(kind, h, p){
+  const el = $('#res_ban');
+  el.hidden = false;
+  el.className = 'alert ' + kind;
+  el.querySelector('.ai').textContent = AICON[kind] || 'i';
+  el.querySelector('h3').textContent = h;
+  el.querySelector('p').innerHTML = p;
+}
+
+// =================================================================== jobs
+function watch(j, host){
+  if (!j || !j.id){ alert((j && j.error) || '启动失败'); return; }
+  jobId = j.id;
+  logEl = $(host || '#jlog');
+  // The log used to be pinned open at the foot of the page and scrolled into view. It is
+  // now folded inside the progress panel next to the chips, where the state already is.
+  if (logEl.id === 'hlog'){ logEl.hidden = false; logEl.scrollIntoView({block:'nearest'}); }
+  if (!flow.t0) flow = {sub:'正在启动…', t0:Date.now(), step:0, of:0};
+  if (!tJob) tJob = setInterval(pollJob, 700);
+}
+async function pollJob(){
+  if (!jobId || !logEl) return;
+  const j = await api('/api/job/' + jobId);
+  logEl.innerHTML = `<b>${esc(j.label||'')} · ${j.state} · ${j.elapsed||0}s</b>\n` +
+                    (j.lines||[]).map(esc).join('\n');
+  logEl.scrollTop = logEl.scrollHeight;
+  if (logEl.id === 'jlog'){ pgFeed(j); drawSteps(ses(cur) || {duration_s:0}); }
+  if (j.state !== 'running'){
+    clearInterval(tJob); tJob = null; jobId = null;
+    flow = {sub:'', t0:0, step:0, of:0};
+    if (j.state === 'done') $('#res_prog').hidden = true;   // failed: keep the log reachable
+    else { pgOpen = true; pgShow('执行失败', '日志在下方'); }
+    const kind = jobKind; jobKind = null;
+    CF = null;                       // whatever the job wrote, re-read it from disk
+    await refresh(0);
+    if (kind && j.state === 'failed')
+      ban('fail', (kind === 'asr' ? '语音识别失败' : '生成文档失败'),
+          '原因见日志末尾几行（在上方进度条的「查看日志」里）。可截图发送给 AI 助手 定位。');
+    else if (kind === 'asr'){
+      const s = ses(cur);
+      if (s && s.lines > 0)
+        ban('todo', `语音识别完成 \u00b7 ${s.lines} 行 \u00b7 耗时 ${j.elapsed}s`,
+            '四个阶段已推进到「校对确认」。请核对下方三组内容，然后点击「确认，生成纪要」。');
+      else if (staleBE)
+        ban('fail', '后端为旧版本，本次结果无效',
+            '页面已更新，但后台运行的 Python 仍为旧版本，仅执行了旧流程，未进行语音转写。'
+            + '请关闭工具窗口，重新双击 Minutes Desk.bat，然后重新执行语音识别。');
+      else
+        ban('fail', '识别已结束，但无任何文字',
+            '两路音频均未识别出内容。请试听 mic.wav / others.wav，或将日志发送给 AI 助手。');
+    } else if (kind === 'draft'){
+      const s = ses(cur);
+      if (s && s.minutes_written)
+        ban('ok', `纪要草稿已写好 \u00b7 用了 ${j.elapsed}s`,
+            '纸面已重排。发出前请通读一遍：模型会漏掉东西，也会把话说得比会上更满。'
+            + '右上角的「编辑正文」可以直接改。');
+      else
+        ban('fail', '草稿没写成',
+            '原因见上方「查看日志」的最后几行。最常见的是模型名或密钥不对，'
+            + '也可能模型返回的内容不是一份完整的 minutes.md。');
+    } else if (kind === 'doc'){
+      const s = ses(cur);
+      ban('ok', `逐字稿已生成 \u00b7 用了 ${j.elapsed}s`,
+          (s && s.minutes_written) ? '纪要正文也在里面，点右上「打开纪要」。'
+          : '逐字稿和事实清单已经齐了。<b>纪要正文由 AI 助手写</b>：把这个会话目录名发给 AI 助手，'
+          + 'AI 助手读逐字稿、按模板写进 minutes.md，再点一次“确认，生成文档”即可成文。');
+    }
+  }
+}
+
+// =================================================================== history
+
+function drawSessions(){
+  const all = S.sessions || [];
+  const local = all.filter(s => s.state !== 'archived');
+  const arch = all.filter(s => s.state === 'archived');
+  const pend = local.filter(s => !s.has_minutes && s.state !== 'recording').length;
+
+  $('#hsub1').textContent = local.length
+    ? `${local.length} 场` + (pend ? ` · ${pend} 场待处理` : ' · 全部已生成') : '';
+  $('#slist').innerHTML = local.length ? group(local)
+    : '<div class="empty"><b>还没有会议</b>点上面的「新录音」，填好名称与与会人就能开始。</div>';
+
+  $('#hsub2').textContent = arch.length ? `${arch.length} 场` : '';
+  $('#alist').innerHTML = arch.length ? arch.map(card).join('')
+    : `<div class="empty"><b>暂无归档</b></div>`;
+  drawCur(); drawState(); drawFacts();
+}
+
+function when(iso){
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(iso);
+  if (!m) return iso;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]), t = new Date();
+  const day = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+  const y = new Date(t.getTime() - 864e5);
+  const head = day(d, t) ? '今天' : day(d, y) ? '昨天' : `${+m[2]} 月 ${+m[3]} 日`;
+  return `${head} ${m[4]}:${m[5]}`;
+}
+
+/* The list is every meeting on this machine, so a row is one line: what it was,
+   when, and the one thing it is still waiting for. Every action a meeting has
+   lives in the work column next to it, so no row carries a button. */
+const TAGC = {'录制中':'e', '待语音识别':'w', '待确认':'w', '正文待撰写':'w', '纪要已成文':'g'};
+function dayOf(s){
+  const m = /^(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)/.exec(s.name || '');
+  if (!m) return '更早';
+  const d = new Date(+m[1], +m[2] - 1, +m[3]), t = new Date();
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  if (same(d, t)) return '今天';
+  if (same(d, new Date(t.getTime() - 864e5))) return '昨天';
+  const W = ['日','一','二','三','四','五','六'];
+  return `${+m[2]} 月 ${+m[3]} 日 · 周${W[d.getDay()]}`;
+}
+function group(list){
+  let last = null, out = '';
+  list.forEach(s => {
+    const d = dayOf(s);
+    if (d !== last){ out += `<div class="sgr">${esc(d)}</div>`; last = d; }
+    out += card(s);
+  });
+  return out;
+}
+/* A meeting with no name is still a meeting, and there can be several in one day, so
+   the fallback counts within the day rather than repeating the date the group header
+   already carries. Any of them can be renamed on the spot. */
+function seqOf(s){
+  const day = (s.name || '').slice(0, 10);
+  const same = (S.sessions || []).filter(x => (x.name || '').slice(0, 10) === day);
+  return same.length - same.findIndex(x => x.name === s.name);
+}
+function nameOfSes(s){
+  if (s.title) return esc(s.title);
+  const n = seqOf(s);
+  return `<em>会议 ${n}</em>`;
+}
+function card(s){
+  const at = stage(s);
+  const lab = s.state === 'recording' ? '录制中'
+    : at === 0 ? '待语音识别' : at <= 2 ? '待确认'
+    : at === 3 ? '正文待撑写' : '纪要已成文';
+  const tm = /_(\d\d)(\d\d)/.exec(s.name || '');
+  const arc = s.state === 'archived';
+  const nm = renAt === s.name
+    ? `<b><input class="ri" id="si_ren" type="text" value="${esc(s.title || '')}"
+         placeholder="会议名称" onclick="event.stopPropagation()"
+         onkeydown="renKey(event, '${esc(s.name)}')" onblur="renSave('${esc(s.name)}')"></b>`
+    : `<b>${nameOfSes(s)}</b>
+       <span class="rn" title="重命名" onclick="event.stopPropagation();
+         renStart('${esc(s.name)}')"><svg class="ic sm"><use href="#i-edit"/></svg></span>`;
+  return `<a class="si${s.state === 'recording' ? ' rec' : ''}${arc ? ' arc' : ''}${
+      s.name === cur ? ' on' : ''}" data-n="${esc(s.name)}" onclick="pick('${esc(s.name)}')"
+      title="${esc(s.title || s.name)}">
+    ${nm}
+    <span class="r"><s>${tm ? tm[1] + ':' + tm[2] : '--:--'}${
+      s.duration_s ? ' · ' + hms(s.duration_s) : ''}</s>
+      ${arc ? '<span class="cl" title="已归档到 OneDrive"><svg class="ic sm"><use href="#i-cloud"/></svg></span>' : ''}
+      <em class="${TAGC[lab] || ''}">${lab}</em></span>
+  </a>`;
+}
+/* Renaming writes session.json and nothing else: the folder name is a timestamp and
+   every other file finds this session by it. */
+let renAt = null;
+function renStart(n){
+  renAt = n; drawSessions();
+  setTimeout(() => { const e = $('#si_ren'); if (e){ e.focus(); e.select(); } }, 0);
+}
+function renKey(ev, n){
+  if (ev.key === 'Enter'){ ev.preventDefault(); ev.target.blur(); }
+  if (ev.key === 'Escape'){ renAt = null; drawSessions(); }
+}
+async function renSave(n){
+  const e = $('#si_ren');
+  if (!e || renAt !== n) return;
+  const v = e.value.trim();
+  renAt = null;
+  const was = (ses(n) || {}).title || '';
+  if (v === was){ drawSessions(); return; }
+  const r = await api('/api/rename', {session: n, title: v});
+  if (r && r.error) ban('fail', '重命名失败', r.error);
+  await refresh();
+}
+/* The card list is only rebuilt on refresh, so selecting a meeting has to move the
+   frame itself - otherwise the highlight stays on the meeting you just left while the
+   work column shows the new one. */
+function markOn(){
+  document.querySelectorAll('#slist a.si,#alist a.si').forEach(a =>
+    a.classList.toggle('on', a.dataset.n === cur));
+}
+function pick(name){
+  cur = name; tabAuto = true; noAuto = false;
+  document.body.classList.remove('sesopen');
+  docSig = null;
+  markOn(); drawCur(); drawState(); go('meet');
+}
+async function doProcess(name){
+  cur = name; drawCur();
+  watch(await api('/api/process', {session:name}), view === 'hist' ? '#hlog' : '#jlog');
+}
+async function doFrames(name){
+  watch(await api('/api/frames', {session:name}), view === 'hist' ? '#hlog' : '#jlog');
+}
+/* "Where do I click to put this in the cloud?" - here, in the header of the meeting it
+   belongs to. If archiving was never switched on, the button opens the setting instead
+   of failing silently. */
+async function upSes(){
+  if (!cur) return;
+  if (!(S.config && S.config.archive_enabled)){
+    go('cfg');
+    const a = $('#c_archen');
+    if (a) a.scrollIntoView({block:'center'});
+    return;
+  }
+  doArchive(cur);
+}
+async function doArchive(name){
+  if (!confirm(name + '\n\n整场会议上传至 OneDrive，本地仅保留索引。\n确认该会议材料已全部完成？')) return;
+  const r = await api('/api/archive', {session:name});
+  if (r.error) alert(r.error); else refresh(0);
+}
+async function reveal(p){ if (p) await api('/api/open', {path:p}); }
+
+// =================================================================== wiring
+$('#r_others').addEventListener('input', readAtt);
+$('#r_video').addEventListener('change', e => e.target.dataset.touched = '1');
+document.addEventListener('keydown', e => { if (e.key === 'Escape') popHide(); });
+document.addEventListener('mousedown', e => {
+  if (!popOn()) return;
+  if ($('#pop').contains(e.target) || e.target.closest('.lamp') || e.target.closest('#topst')) return;
+  popHide();
+});
+
+// Opening the tool must end with a result on screen, not an invitation to go find one.
+// A machine that has never been tested gets tested now; after that we replay what was
+// measured, because a test plays a tone and nobody wants that mid-meeting.
+/* The split between the columns belongs to whoever is reading, so both borders drag
+   and the result is remembered. Double click restores the width the layout was drawn at. */
+function gutInit(){
+  [['#gut1', '--w-ses', 'mmt.wses', 150, 460, 1],
+   ['#gut2', '--w-doc', 'mmt.wdoc', 300, 1000, -1]].forEach(([sel, vr, key, lo, hi, dir]) => {
+    const el = $(sel);
+    if (!el) return;
+    const now = () => parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue(vr)) || lo;
+    try { const v = +localStorage.getItem(key);
+      if (v >= lo && v <= hi) document.documentElement.style.setProperty(vr, v + 'px'); }
+    catch (e){}
+    el.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      el.classList.add('on');
+      document.body.style.userSelect = 'none';
+      const x0 = ev.clientX, w0 = now();
+      const mv = e => document.documentElement.style.setProperty(vr,
+        Math.min(hi, Math.max(lo, w0 + dir * (e.clientX - x0))) + 'px');
+      const up = () => {
+        el.classList.remove('on');
+        document.body.style.userSelect = '';
+        document.removeEventListener('pointermove', mv);
+        document.removeEventListener('pointerup', up);
+        try { localStorage.setItem(key, now()); } catch (e){}
+      };
+      document.addEventListener('pointermove', mv);
+      document.addEventListener('pointerup', up);
+    });
+    el.addEventListener('dblclick', () => {
+      document.documentElement.style.removeProperty(vr);
+      try { localStorage.removeItem(key); } catch (e){}
+    });
+  });
+}
+/* The paper announces itself when it has painted, and gets told the palette then:
+   the iframe can load long after the switch was last touched. */
+addEventListener('message', e => {
+  if (e.data && e.data.mmt === 'paper-ready'){ pushTheme(); pushLang(); }
+});
+setTheme(document.documentElement.dataset.theme || 'dark');
+gutInit();
+placeDoc();
+try { setLangUI(localStorage.getItem('mmt.uilang') || 'zh'); } catch(e){}
+(async () => {
+  await refresh(1);
+  await engLoad(0);
+  if (!S.doctor.tested_at) await levels();
+})();
+setInterval(() => { if (!tRec && !tJob && !busy) pollRec(); }, 3000);
+</script>
+</body></html>

@@ -1,0 +1,232 @@
+{
+  "_readme": [
+    "Two tiers on purpose.",
+    "hotwords  : fed to Whisper during decoding. ONLY rare, distinctive terms that do not",
+    "            collide with ordinary English/Chinese. Keep this list short (biasing the",
+    "            decoder with 200 terms makes quality WORSE, not better).",
+    "fix_after : full vocabulary, applied AFTER decoding by conservative fuzzy matching.",
+    "            Safe to grow without limit.",
+    "ambiguous : deliberately NOT auto-corrected. Left for the LLM step, which can see the",
+    "            whole conversation and judge from context.",
+    "people    : names are the single highest-value hotwords (very rare tokens).",
+    "            Spellings matter more here than anywhere else - check them.",
+    "phonetic : build.py additionally does a metaphone+fuzzy pass. Matches are NEVER replaced, only annotated inline as  word [Canon?]  so the LLM can judge. Once you confirm one, move it into fix_after as an exact variant.",
+    "initial_prompt : one short paragraph of context handed to Whisper before decoding. Measured +0.8 WER points and +1 jargon term on real accented speech, free. Keep it under ~200 tokens; Whisper truncates and long prompts start hallucinating."
+  ],
+  "_layers": [
+    "This file ships with the program and is REPLACED on every update. Do not edit it.",
+    "Your own terms belong in glossary.user.json, in the user data directory",
+    "(%LOCALAPPDATA%\\MinutesDesk by default). The tool reads base + user merged,",
+    "with the user layer winning, so you can override anything here without losing it",
+    "on the next update."
+  ],
+  "hotwords": [
+    "Quip",
+    "Chime",
+    "utilization",
+    "absorption",
+    "headcount",
+    "deep dive",
+    "Lake Formation",
+    "Redshift",
+    "CloudFront",
+    "QuickSight",
+    "Echo",
+    "paid time",
+    "non-paid time",
+    "WBR",
+    "timeout",
+    "query",
+    "Python",
+    "RTO",
+    "callout",
+    "action item",
+    "node"
+  ],
+  "fix_after": {
+    "Lake Formation": [
+      "Lake Formation",
+      "lake formation",
+      "lakeformation"
+    ],
+    "SharePoint": [
+      "SharePoint",
+      "share point",
+      "Sharepoint"
+    ],
+    "QuickSight": [
+      "QuickSight",
+      "quick sight",
+      "Quicksight"
+    ],
+    "QuickSuite": [
+      "QuickSuite",
+      "quick suite"
+    ],
+    "absorption": [
+      "absorption",
+      "absorbtion",
+      "obsorption"
+    ],
+    "utilization": [
+      "utilization",
+      "utilisation",
+      "utilization rate"
+    ],
+    "headcount": [
+      "headcount",
+      "head count",
+      "HC",
+      "这还看",
+      "这还款",
+      "head coun"
+    ],
+    "deep dive": [
+      "deep dive",
+      "deepdive",
+      "deep-dive"
+    ],
+    "action item": [
+      "action item",
+      "actionable item",
+      "AI item"
+    ],
+    "skip-level": [
+      "skip level",
+      "skip-level",
+      "skiplevel"
+    ],
+    "standup": [
+      "standup",
+      "stand up meeting",
+      "stand-up"
+    ],
+    "RTO": [
+      "RTO",
+      "R T O",
+      "our T O"
+    ],
+    "callout": [
+      "callout",
+      "call out",
+      "call-out"
+    ],
+    "WBR": [
+      "WBR",
+      "W B R",
+      "weekly business review"
+    ],
+    "MBR": [
+      "MBR",
+      "M B R",
+      "monthly business review"
+    ],
+    "QBR": [
+      "QBR",
+      "Q B R",
+      "quarterly business review"
+    ],
+    "SLT": [
+      "SLT",
+      "S L T",
+      "senior leadership team"
+    ],
+    "VOC": [
+      "VOC",
+      "V O C",
+      "voice of customer"
+    ],
+    "Bedrock": [
+      "Bedrock",
+      "bed rock"
+    ],
+    "DynamoDB": [
+      "DynamoDB",
+      "dynamo DB",
+      "Dynamo D B"
+    ],
+    "CloudFront": [
+      "CloudFront",
+      "cloud front"
+    ],
+    "Lambda": [
+      "Lambda",
+      "lamda",
+      "lambada"
+    ],
+    "Athena": [
+      "Athena",
+      "Athina"
+    ],
+    "Glue": [
+      "Glue",
+      "AWS glue"
+    ],
+    "workaround": [
+      "workaround",
+      "Walkaround",
+      "walk around",
+      "work round"
+    ],
+    "Redshift": [
+      "Redshift",
+      "red shift",
+      "Red Shift"
+    ],
+    "dashboard": [
+      "dashboard",
+      "dash board",
+      "dashborad"
+    ],
+    "prefix": [
+      "prefix",
+      "pre fix"
+    ],
+    "punch": [
+      "punch",
+      "punches",
+      "punch data"
+    ],
+    "PT": [
+      "PT"
+    ],
+    "refresh script": [
+      "refresh script",
+      "refreshed script",
+      "refresh Script"
+    ],
+    "paid time": [
+      "Paytime"
+    ],
+    "non-paid time": [
+      "NamPayTime"
+    ],
+    "query": [
+      "Quipri"
+    ]
+  },
+  "ambiguous": {
+    "_note": "Never auto-replaced. The LLM decides from context and flags anything unclear.",
+    "node": "a site/location vs a graph node vs Node.js",
+    "Quick": "Amazon Quick Suite (the product) vs the adjective 'quick'"
+  },
+  "people": {},
+  "phonetic_skip": [
+    "Athena",
+    "Glue",
+    "Lambda",
+    "PT",
+    "absorption",
+    "action item",
+    "callout",
+    "dashboard",
+    "deep dive",
+    "node",
+    "prefix",
+    "punch",
+    "refresh script",
+    "standup",
+    "utilization"
+  ],
+  "_prompt_rule": "There is deliberately no initial_prompt. Measured 2026-09-10: a prompt naming meeting facts was emitted verbatim as participant speech, and a style-only prompt written to be safe was ALSO emitted ('Transcribe exactly what is said...' became line 1 of a transcript). Any English sentence in the decoder context can come back out as speech on hard audio. Do not add one back. Jargon goes in hotwords: bare nouns are not sentence-shaped, cannot be copied out, and measurably help."
+}
