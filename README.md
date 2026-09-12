@@ -15,7 +15,7 @@ Two ways. Both end in the same place, and neither one asks you questions.
 **If you use a coding agent** (Claude Code, Cursor, Copilot Agent, Codex or similar), paste
 one line into it:
 
-> Install Minutes Desk from `<this repo's URL>` for me, following AGENTS.md.
+> Install Minutes Desk from `https://github.com/DanielWCN/minutes-desk` for me, following AGENTS.md.
 
 The agent clones the repo and runs the installer. `AGENTS.md` is written for it, not for you.
 
@@ -158,7 +158,7 @@ Windows 上的本机会议纪要工具：录双轨、在自己电脑上转写、
 
 **你手上有 AI 助手**（Claude Code、Cursor、Copilot Agent 等）：把这一句贴给它就行。
 
-> 帮我从 `<本仓库地址>` 装 Minutes Desk，照 AGENTS.md 做。
+> 帮我从 `https://github.com/DanielWCN/minutes-desk` 装 Minutes Desk，照 AGENTS.md 做。
 
 它会自己拉代码、自己跑安装。`AGENTS.md` 是写给它看的，不是写给你看的。
 
