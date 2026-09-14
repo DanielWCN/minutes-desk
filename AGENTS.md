@@ -63,6 +63,26 @@ If a step fails, fix it and retry rather than handing the error back to the user
 common causes are a stale `PATH` after installing Python (open a new shell) and a
 corporate proxy blocking PyPI (`pip config set global.proxy ...`).
 
+## Update an install that already exists
+
+If they asked you to "update Minutes Desk" and a copy is already on the machine, do not
+clone a second one. Find the existing checkout (the Desktop shortcut `Minutes Desk.bat`
+points at it; so does the `staging_dir` in `%LOCALAPPDATA%\MinutesDesk\config.json`), then:
+
+```bash
+git pull
+python install.py            # tops up; add --no-model if the model is already there
+```
+
+Close the black `Minutes Desk` console window if it is open, and tell them to double-click
+`Minutes Desk.bat` again. Then say one thing: the version now next to the logo in the title
+bar, and that `CHANGELOG.md` lists what changed.
+
+Everything the person has accumulated lives in `%LOCALAPPDATA%\MinutesDesk\` and outside
+the program directory on purpose, so an update cannot touch their config, their glossary or
+their meetings. Do not "clean up" or reset any of it, do not re-run the calendar harvest,
+and do not change any setting they chose.
+
 ## Then, if you have access to their internal documentation
 
 The single biggest quality lever is the glossary: a speech model that knows a term spells
