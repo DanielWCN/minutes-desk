@@ -174,10 +174,13 @@ def apply_speakers(segs: list[dict], ses: Path, fallback: str = "Others") -> dic
             stats["unmatched"] += 1
             continue
         info = names.get(str(best)) or {}
-        who = info.get("speaker") or f"Speaker {best}"
+        # A cluster whois.py left out of speakers.json was too short to judge: a cough, a
+        # "Right.", or two people at once. Calling that "Speaker 31" invents a participant
+        # out of two seconds of noise, so it keeps the label the track already had.
+        who = info.get("speaker") or (f"Speaker {best}" if not names else fallback)
         conf = info.get("confidence") or "unknown"
         disp = who
-        if bestov / span < 0.6:
+        if bestov / span < 0.6 and who != fallback:
             stats["overlapped"] += 1
             # attribution itself is shaky, not just the name. A low-confidence label already
             # ends in "?)" - do not stack a second question mark on it.
@@ -459,9 +462,9 @@ def main() -> int:
             md.append(f"- **{spk_stats['overlapped']} line(s) marked with a trailing `?` on "
                       "the speaker**: two people overlapped there, so who said it is a guess")
         if spk_stats.get("unnamed"):
-            md.append(f"- {spk_stats['unnamed']} line(s) are from a voice that is not "
-                      "confirmed yet. Run `speakers.py <session> --confirm` to name it once "
-                      "and it is remembered.")
+            md.append(f"- {spk_stats['unnamed']} line(s) are from a voice nobody named out "
+                      "loud, so it stayed `Speaker N` or was written as a guess. The "
+                      "evidence for every voice is in the document's appendix.")
     if dropped:
         md.append(f"- **{len(dropped)} segment(s) dropped as hallucinations** "
                   "(non-speech audio that Whisper turned into text); listed at the bottom")

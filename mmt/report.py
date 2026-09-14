@@ -658,9 +658,9 @@ def main() -> int:
               if c.get("confidence") != "high"]
     if unconf:
         ban.append(("warn", "&#128100;",
-                    f"<div><b>{len(unconf)} 个声音还没确认是谁</b>：写成 <code>Speaker N</code> "
-                    "或带「推测」的都是猜的。跑一次 "
-                    "<code>python mmt/speakers.py &lt;session&gt; --confirm</code> 即可记住。</div>"))
+                    f"<div><b>{len(unconf)} 个声音没认出是谁</b>：写成 <code>Speaker N</code> "
+                    "或带「推测」的，都是因为全场没人叫过他的名字 —— 光靠声音认不出人。"
+                    "附录「说话人是怎么认出来的」里写着每一个的依据，核一下再改正文。</div>"))
     if susp:
         det = ", ".join(f"{hhmmss(x.get('t') or 0)} (~{float(x.get('gap_s') or 0):.0f}s)"
                         for x in susp)
@@ -777,6 +777,9 @@ def main() -> int:
                        f'{e(", ".join(amb))}</div>' if amb else "")))
     if spkinfo.get("clusters"):
         rows = ""
+        # the clip column exists only when there are clips to play; an empty column in
+        # every row reads as a broken page, not as "this is optional"
+        anyclip = any(c.get("clip") for c in spkinfo["clusters"].values())
         for cid, c in sorted(spkinfo["clusters"].items(),
                              key=lambda kv: -(kv[1].get("talk_time_s") or 0)):
             pill = {"high": '<span class="pill ok">已确认</span>',
@@ -784,17 +787,21 @@ def main() -> int:
                         c.get("confidence"), '<span class="pill">未命名</span>')
             au = (f'<audio controls preload="none" src="{e(c["clip"])}"></audio>'
                   if c.get("clip") else "")
-            cand = ("；".join(f'{e(x["name"])} {x["score"]:.2f}'
-                             for x in (c.get("candidates") or [])[:3]))
+            cand = e(c.get("why") or "") or ("；".join(
+                f'{e(x["name"])} {x["score"]:.2f}'
+                for x in (c.get("candidates") or [])[:3]))
             rows += (f'<tr><td><b>{e(c.get("speaker_full") or c.get("speaker"))}</b><br>{pill}'
                      f'</td><td>{c.get("talk_time_s", 0):.0f}s</td>'
-                     f'<td class="why">{cand}</td><td>{au}</td></tr>')
+                     f'<td class="why">{cand}</td>'
+                     + (f'<td>{au}</td>' if anyclip else '') + '</tr>')
         ap_.append(("说话人是怎么认出来的 · Speaker attribution",
                     len(spkinfo["clusters"]),
-                    '<div class="why" style="margin-bottom:10px">声纹聚类、本机声纹库和 Outlook '
-                    '受邀名单三者一致才写真名，否则保留 Speaker N。</div>'
-                    f'<table class="d"><tr><th>是谁</th><th>时长</th><th>声纹比对</th>'
-                    f'<th>试听</th></tr>{rows}</table>'))
+                    '<div class="why" style="margin-bottom:10px">声音只决定哪些话是同一个人说的；'
+                    '名字来自会上互相的称呼，还要对得上受邀名单，两边都成立才写真名，否则保留 '
+                    'Speaker N。声纹算完即弃，没有存到硬盘上。</div>'
+                    f'<table class="d"><tr><th>是谁</th><th>时长</th><th>依据</th>'
+                    + ('<th>试听</th>' if anyclip else '')
+                    + f'</tr>{rows}</table>'))
     if dropped:
         rows = "".join(
             f'<tr><td>{hhmmss(d.get("start") or 0)}</td>'

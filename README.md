@@ -49,15 +49,36 @@ Two tracks are written, on purpose:
 | `others.wav` | loopback of the system output | everyone else |
 
 A one-to-one call therefore needs no speaker diarization at all - the split is physical,
-not statistical. For a larger meeting, attendee names come from the Outlook desktop client
-already signed in on the machine, and you confirm who said what at a review step.
+not statistical. Three or more people share one mixed track, and putting names on it takes
+two steps kept deliberately apart:
+
+`diarize.py` splits the far-end track into anonymous voices - "these 229 turns came from 9
+different people". Offline, two model files (~34 MB), about 9x realtime on six CPU threads.
+No voiceprint is written to disk. A voiceprint that outlives the meeting is biometric data,
+so none is kept and a colleague is never recognised across meetings.
+
+`whois.py` decides which voice is which person, from the attendee list (read from the
+Outlook desktop client already signed in, then ticked by you) plus how people address each
+other out loud: "thanks Lin", "over to you, Sam", "this is Alex". The voice decides which
+lines belong together, the words decide whose they are, and the two check each other. A
+voice nobody named stays `Speaker 7`, because a plausible name on the wrong turn is worse
+than no name at all.
+
+Both steps are optional and both skip silently when they cannot run - they need
+`pip install sherpa-onnx`, the two model files (diarize.py prints the download URLs), and,
+for the naming step, an engine that can be called without copy-paste. Measured on a real
+33-minute call, 27 invited and 9 who actually spoke: 6 voices named with a quotable reason,
+2 flagged as guesses, 2 left as `Speaker N`, and 90% of the speaking time carried a
+confident name. Cost: about 4 minutes on top of transcription.
 
 ## What you get after a meeting
 
 ```
 sessions/2026-05-04_1430_project-review/
   mic.wav  others.wav        the two tracks
-  transcript.md              timestamped, both speakers, private ranges cut (both tracks)
+  transcript.md              timestamped, per speaker, private ranges cut (both tracks)
+  diarization.json           the anonymous voices: turns, and how long each one talked
+  speakers.json              which voice is which person, with the evidence for each
   minutes.json               the facts: attendees, decisions, action items, open questions
   minutes.md                 the body, written by a language model (see below)
   minutes.html              one page, print-clean, with a "copy the email body" button

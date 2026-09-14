@@ -59,9 +59,10 @@ PACKAGES = {
     "wordfreq": "wordfreq",
     "PIL": "Pillow",
 }
-# Nothing optional left: the two-track design (my mic / everyone else) makes speaker
-# diarization unnecessary, so sherpa-onnx and the voiceprint stack came out on 09-12.
-OPTIONAL_PACKAGES: dict[str, str] = {}
+# Optional: with three or more people the loopback track is everyone mixed together, and
+# splitting it back apart is what turns "Others" into names (diarize.py + whois.py). A 1:1
+# needs none of it - there the two tracks already are the two people.
+OPTIONAL_PACKAGES: dict[str, str] = {"sherpa_onnx": "sherpa-onnx"}
 
 MODEL_CACHE_HINT = "large-v3-turbo"
 MODEL_SIZE_MB = 1622

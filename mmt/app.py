@@ -14,6 +14,7 @@ user starts by clicking a button. Analysis of the recording is a separate, human
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import mimetypes
 import os
@@ -30,6 +31,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import archive
 import config
+import diarize
 import doctor
 import llm
 import minutes as M
@@ -40,7 +42,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Bump this whenever app.py changes shape, and the page will say so out loud.
-BUILD = "2026-09-14f"
+BUILD = "2026-09-14g"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
@@ -309,6 +311,41 @@ def _openable(cfg: dict, p: Path) -> bool:
 
 
 # ------------------------------------------------------------------------------------- api
+def _speaker_steps(cfg: dict, d: Path) -> list:
+    """The steps that turn one anonymous "Others" into names, or nothing at all.
+
+    Splitting the far-end track apart costs minutes of CPU and needs two model files, so
+    every reason to skip is settled here, while the chain is being built, rather than
+    failing inside it. No far-end track (a solo recording) and there is nothing to split.
+    No sherpa-onnx or no models and the step cannot run at all. And a diarization already
+    newer than the audio is still valid, so a second press of "generate documents" does
+    not pay for it twice.
+
+    Re-splitting renumbers the clusters, which makes any existing speakers.json describe
+    voices that no longer exist -- so naming always re-runs with it. That is also why
+    naming is skipped when speakers.json is already there and the split was not redone:
+    it is the one file a person may have corrected by hand.
+    """
+    out: list = []
+    wav = d / "others.wav"
+    if not wav.exists():
+        return out
+    diar = d / "diarization.json"
+    try:
+        fresh = diar.exists() and diar.stat().st_mtime >= wav.stat().st_mtime
+    except OSError:
+        fresh = False
+    if not fresh:
+        if importlib.util.find_spec("sherpa_onnx") is None:
+            return out
+        if not (diarize.SEG_MODEL.exists() and diarize.EMB_MODEL.exists()):
+            return out
+        out.append(["?", PY, "-u", str(HERE / "diarize.py"), str(d)])
+    if llm.can_auto(cfg) and (not fresh or not (d / "speakers.json").exists()):
+        out.append(["?", PY, "-u", str(HERE / "whois.py"), str(d)])
+    return out
+
+
 def _draft_step(cfg: dict, d: Path) -> list:
     """
     The chain step that writes the minutes with a model, or nothing at all.
@@ -718,9 +755,12 @@ class H(BaseHTTPRequestHandler):
             asr_argv += ["--wait", "1800"]
         if b.get("retranscribe"):
             asr_argv.append("--force")
-        steps = [asr_argv, [PY, "-u", str(HERE / "build.py"), str(d)]]
+        bld = [PY, "-u", str(HERE / "build.py"), str(d)]
         if others:
-            steps[1] += ["--others", others]
+            bld += ["--others", others]
+        # who said what has to be settled BEFORE build.py, the step that writes the
+        # labels into the transcript
+        steps = [asr_argv] + _speaker_steps(cfg, d) + [bld]
         # A model that is already configured should not need a second click. The draft runs
         # inside the chain, before the document is rendered, so one press turns a recording
         # into minutes. It is a soft step: no network, no key, no local server, still a
@@ -1071,9 +1111,10 @@ class H(BaseHTTPRequestHandler):
         if b.get("save_only"):
             return {"ok": True, "saved": True,
                     "at": datetime.now().strftime("%H:%M:%S")}
-        steps = [[PY, "-u", str(HERE / "build.py"), str(d)]]
+        bld = [PY, "-u", str(HERE / "build.py"), str(d)]
         if others:
-            steps[0] += ["--others", others]
+            bld += ["--others", others]
+        steps = _speaker_steps(cfg, d) + [bld]
         steps += _draft_step(cfg, d)
         steps.append([PY, "-u", str(HERE / "report.py"), str(d)]
                      + (["--me", cfg["me"]] if cfg.get("me") else []))
