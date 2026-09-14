@@ -39,7 +39,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Bump this whenever app.py changes shape, and the page will say so out loud.
-BUILD = "2026-09-14b"
+BUILD = "2026-09-14c"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
@@ -1031,6 +1031,12 @@ class H(BaseHTTPRequestHandler):
              "title": title, "others": others, "accept": accept, "ack": ack,
              "attendees": picked if isinstance(picked, list) else None},
             ensure_ascii=False, indent=1), encoding="utf-8")
+        # "Save" and "save and generate" are two different intentions. Ticking the room
+        # and coming back to it later is the common one, and it must not cost a rebuild of
+        # every document.
+        if b.get("save_only"):
+            return {"ok": True, "saved": True,
+                    "at": datetime.now().strftime("%H:%M:%S")}
         steps = [[PY, "-u", str(HERE / "build.py"), str(d)]]
         if others:
             steps[0] += ["--others", others]

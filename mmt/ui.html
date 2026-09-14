@@ -475,6 +475,8 @@ textarea:focus{outline:none;border-color:var(--primary-hi);
 
 /* confirm: every question the machine cannot answer, answered here and nowhere else */
 .qz{display:flex;flex-direction:column;gap:7px}
+.qnil{padding:9px 11px;border:1px solid rgba(16,185,129,.3);border-radius:7px;
+  background:var(--ok-dim);color:var(--ok-t);font-size:12.5px}
 /* The decision reads as a substitution - heard form, arrow, target form - so the two
    spellings sit side by side and the buttons no longer have to repeat them. */
 .qi{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;
@@ -1227,7 +1229,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
             </div>
             </div>
 
-            <div class="stg" id="c_qwrap" hidden>
+            <div class="stg" id="c_qwrap">
               <div class="grp"><u>2</u><h4>术语校对</h4>
                 <i>听到的写法与词表正名不一致</i><span class="f1"></span>
                 <span class="tag" id="c_qn"></span></div>
@@ -1246,6 +1248,8 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
                 <em>纪要生成后删除音频</em></label>
               <span class="f1"></span>
               <span class="msg" id="c_msg"></span>
+              <button class="btn lg" id="c_save" onclick="doConfirm(1)"
+                title="只把这一页记下来：与会人的勾选、会议名称、词语的决定。不重新生成任何文档">保存</button>
               <button class="btn pri lg" id="c_go" onclick="doConfirm()">确认，生成纪要</button>
             </div>
           </div>
@@ -1364,7 +1368,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Bumped together with BUILD in app.py. The same string on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_BUILD = '2026-09-14b';
+const UI_BUILD = '2026-09-14c';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2723,12 +2727,18 @@ function drawConfirm(){
   // group 2 - the words the glossary is unsure about. Read as a substitution, decided by
   // three buttons, and the sentence it was heard in expands to the turns around it.
   const ps = CF.pairs || [];
-  $('#c_qwrap').hidden = !ps.length;
   const und = ps.filter(x => picks[x.key] === undefined).length;
+  // An empty group stays on the page, and says so. Hiding it made a clean check look like
+  // a section that had gone missing, with the numbers reading 1 and 3.
   $('#c_qn').textContent = ps.length
-    ? (und ? `待确认 ${und} / ${ps.length} 项` : `已全部确认 ${ps.length} 项`) : '';
-  $('#c_qn').className = 'tag ' + (und ? 'gold' : 'green');
-  $('#c_qz').className = 'qz' + (ps.length && !und ? ' allset' : '');
+    ? (und ? `待确认 ${und} / ${ps.length} 项` : `已全部确认 ${ps.length} 项`) : '没有要改的';
+  $('#c_qn').className = 'tag ' + (ps.length && und ? 'gold' : 'green');
+  $('#c_qz').className = 'qz' + (!ps.length || !und ? ' allset' : '');
+  if (!ps.length){
+    $('#c_qz').innerHTML = '<div class="qnil">\u2713 听到的写法和词表一致，' +
+      '这一场没有需要改的词。</div>';
+    return drawConfirmRest(und);
+  }
   $('#c_qz').innerHTML = ps.map((x, i) => {
     const v = picks[x.key];
     const cust = typeof v === 'string' && v;
@@ -2759,6 +2769,10 @@ function drawConfirm(){
       </div>${ctrl}</div>`;
   }).join('');
 
+  return drawConfirmRest(und);
+}
+// group 3 and the action bar. Split out so an empty group 2 can jump straight here.
+function drawConfirmRest(und){
   // group 3 - everything else the machine noticed. Visible until it is ticked.
   const its = CF.issues || [];
   its.forEach(it => { if (!(it.id in acks)) acks[it.id] = !!it.ack; });
@@ -2918,21 +2932,32 @@ function custDone(){
   drawConfirm();
 }
 function qMore(i){ qOpen[i] = !qOpen[i]; drawConfirm(); }
-async function doConfirm(){
+async function doConfirm(saveOnly){
   if (!cur) return;
   $('#c_go').disabled = true;
+  const sv = $('#c_save');
+  if (sv) sv.disabled = true;
   const acc = {};
   (CF && CF.pairs || []).forEach(p => {
     const v = picks[p.key];
     acc[p.key] = typeof v === 'string' && v ? v : v === true;   // string = the typed form
   });
   const keep = attList().filter(n => att2[n]).map(nameOf);
-  ban('busy', '正在生成文档', '按确认结果重建逐字稿，随后渲染纪要与 HTML，约数秒。');
-  jobKind = 'doc';
+  if (!saveOnly){
+    ban('busy', '正在生成文档', '按确认结果重建逐字稿，随后渲染纪要与 HTML，约数秒。');
+    jobKind = 'doc';
+  }
   const r = await api('/api/confirm', {session:cur, title:$('#c_title').value,
     attendees:keep, others:keep.join('; '), sensitive:$('#c_sens').checked,
-    accept:acc, ack:acks});
+    accept:acc, ack:acks, save_only:!!saveOnly});
   $('#c_go').disabled = false;
+  if (sv) sv.disabled = false;
+  if (saveOnly){
+    $('#c_msg').textContent = r && r.saved
+      ? `已保存 ${r.at || ''}，与会人 ${keep.length} 人`
+      : (r && r.error) || '保存失败';
+    return;
+  }
   watch(r, '#jlog');
 }
 function ban(kind, h, p){

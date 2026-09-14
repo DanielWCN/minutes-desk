@@ -612,6 +612,17 @@ def main() -> int:
     # minutes.zh.md / minutes.en.md are the other one. Two files rather than one
     # bilingual file, so each is valid Markdown that can be sent as it stands.
     docs: dict[str, dict] = {}
+    # An untouched scaffold is rebuilt rather than kept, so its header follows the facts
+    # as they are now: the attendee list is ticked on the confirm desk AFTER the first
+    # scaffold is written, and a header naming the wrong people is worse than no header.
+    md0 = ses / "minutes.md"
+    if md0.exists() and not any((ses / f).exists()
+                                for f in ("minutes.zh.md", "minutes.en.md")):
+        try:
+            if M.is_scaffold(md0.read_text(encoding="utf-8")):
+                md0.unlink()
+        except OSError:
+            pass
     for fn, forced in (("minutes.md", None), ("minutes.zh.md", "zh"),
                        ("minutes.en.md", "en")):
         fp = ses / fn

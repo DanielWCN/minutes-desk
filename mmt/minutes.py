@@ -243,6 +243,20 @@ Not what was discussed: what came out of it. Name people; never write "I" or "yo
 # The rules an author (or an AI) has to follow are in profiles/minutes.md.
 
 
+def is_scaffold(text: str) -> bool:
+    """
+    True when nobody has written into this file yet.
+
+    Compared against the template's own body, word for word, because the front matter is
+    exactly the part that has to be allowed to change: the header is rebuilt from the
+    confirmed facts (who was really in the room) every time the documents are generated,
+    right up until the moment a person starts writing. Testing for the string "TBD" would
+    not do - a finished set of minutes can legitimately say an owner or a due date is TBD.
+    """
+    body = lambda t: t.split("---", 2)[-1].strip()      # noqa: E731
+    return body(text) == body(TEMPLATE)
+
+
 def _people(meta: dict, talk: dict, me: str) -> list[str]:
     """
     The names of the other people in the meeting, one per entry.
