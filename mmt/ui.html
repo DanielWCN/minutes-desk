@@ -462,11 +462,26 @@ textarea:focus{outline:none;border-color:var(--primary-hi);
   text-overflow:ellipsis;white-space:nowrap}
 .prog .ph em{font-style:normal;font:11.5px var(--mono);color:var(--faint);flex:none}
 .prog .ph .f1{flex:1}
-.prog .pb{margin-top:8px;height:3px;border-radius:3px;background:rgba(0,0,0,.25);
-  overflow:hidden}
-.prog .pb i{display:block;height:100%;width:34%;border-radius:3px;background:var(--acc);
+.prog .pb{margin-top:8px;height:4px;border-radius:3px;background:rgba(0,0,0,.25);
+  overflow:hidden;position:relative}
+/* The fill is earned, not guessed: it only moves when a step of the chain actually ends.
+   The step in flight has no percentage of its own -- so instead of inventing one, a
+   stripe crawls the whole length to say the thing is alive. */
+.prog .pb i{display:block;height:100%;width:0;border-radius:3px;background:var(--acc);
+  transition:width .45s ease}
+.prog .pb.run:after{content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);
   animation:crawl 1.6s ease-in-out infinite}
-@keyframes crawl{0%{transform:translateX(-100%)}100%{transform:translateX(294%)}}
+@keyframes crawl{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+/* Finished has to stay on screen. A panel that disappears leaves the question open. */
+.prog.ok{border-color:rgba(39,166,68,.45);background:var(--ok-dim)}
+.prog.ok .pb i{background:var(--ok)}
+.prog.ok .spin{animation:none;border-color:var(--ok);border-top-color:var(--ok)}
+.prog.ok .ph b{color:var(--ok-t)}
+.prog.bad{border-color:rgba(235,87,87,.45);background:var(--bad-dim)}
+.prog.bad .pb i{background:var(--bad)}
+.prog.bad .spin{animation:none;border-color:var(--bad);border-top-color:var(--bad)}
+.prog.bad .ph b{color:var(--bad-t)}
 .prog .log{margin-top:8px;max-height:190px;overflow:auto}
 .spin{flex:none;width:11px;height:11px;border-radius:50%;border:2px solid rgba(0,0,0,.3);
   border-top-color:var(--acc);animation:spin .8s linear infinite}
@@ -1049,7 +1064,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
      on screen, and a check that fails puts itself back next to the chip. Everything that
      is not this meeting -- history, settings, appearance -- lives here and nowhere else. -->
 <header class="hdr"><div class="in">
-  <div class="logo"><b>MD</b>纪要台</div>
+  <div class="logo"><b>MD</b>纪要台<i id="ver" data-notr></i></div>
   <div class="rack" id="rack" title="自检：点击任一项看明细"></div>
   <span class="tag act" id="topst" onclick="lampGo('*')" hidden></span>
   <span class="tag red" id="e_meet" hidden></span>
@@ -1192,7 +1207,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
         <div class="ph"><span class="spin"></span><b id="pg_t">正在处理</b>
           <i id="pg_s"></i><span class="f1"></span><em id="pg_e">0:00</em>
           <button class="btn txt sm" id="pg_lg" onclick="pgLog()">查看日志</button></div>
-        <div class="pb"><i></i></div>
+        <div class="pb run" id="pg_b"><i id="pg_bi"></i></div>
         <pre class="log" id="jlog" hidden></pre>
       </div>
 
@@ -1372,9 +1387,9 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 <script src="/i18n.js"></script>
 <script>
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
-/* Bumped together with BUILD in app.py. The same string on both sides means the page
+/* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_BUILD = '2026-09-14h';
+const UI_VERSION = '1.0.0';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -1813,14 +1828,14 @@ async function levels(){
 /* Old Python behind new HTML is the one failure that explains a dozen others, so it is
    named before anything else on the page is believed. */
 function chkBuild(){
-  const be = S.build || null;
-  staleBE = be !== UI_BUILD;
+  const be = S.version || null;
+  staleBE = be !== UI_VERSION;
   const el = $('#oldban');
   el.hidden = !staleBE;
   if (staleBE)
     el.innerHTML = `<b>后端是旧版本，先重启工具。</b>
-      这个页面是 <b>${esc(UI_BUILD)}</b>，正在服务它的 Python 是 <b>${
-        esc(be || '更早的版本（还不会报自己的版号）')}</b>。
+      这个页面是 <b>v${esc(UI_VERSION)}</b>，正在服务它的 Python 是 <b>${
+        esc(be ? 'v' + be : '更早的版本（还不会报自己的版号）')}</b>。
       关掉黑色的「Minutes Desk」窗口，再双击一次
       <b>Minutes Desk.bat</b>（新版会自己结束旧进程）。
       在那之前，语音识别、确认、纪要全都会给错的结果。`;
@@ -2085,7 +2100,7 @@ function openMinutes(){ if (!WIDE()) tabGo(3); }
 function openSes(name){
   cur = name; tabAuto = true; noAuto = false;
   document.body.classList.remove('sesopen');
-  markOn(); drawCur(); drawState(); go('doc');
+  pgIdle(); markOn(); drawCur(); drawState(); go('doc');
 }
 
 /* The meeting that just ended, in the place it was started from: what was captured,
@@ -2652,19 +2667,36 @@ async function doAnalysis(){
   watch(await api('/api/process', {session:cur, retranscribe:!!(s && s.lines > 0)}), '#jlog');
 }
 /* the progress panel: one line of state next to the chips, the log folded behind it */
-let flow = {sub:'', t0:0, step:0, of:0}, pgOpen = false;
+let flow = {sub:'', t0:0, step:0, of:0}, pgOpen = false, pgState = 'run';
 function pgShow(t, sub){
-  $('#res_prog').hidden = false;
+  const box = $('#res_prog');
+  box.hidden = false;
+  box.classList.toggle('ok', pgState === 'ok');
+  box.classList.toggle('bad', pgState === 'bad');
+  $('#pg_b').classList.toggle('run', pgState === 'run');
+  /* Steps already behind us, as a fraction; the step in flight counts half. So the bar
+     moves when a step starts and again when it ends, and never claims a step is done. */
+  const f = pgState === 'run' ? (flow.of ? (flow.step - 0.5) / flow.of : 0) : 1;
+  $('#pg_bi').style.width = Math.max(0, Math.min(1, f)) * 100 + '%';
   $('#pg_t').textContent = t;
   $('#pg_s').textContent = sub || '';
   $('#jlog').hidden = !pgOpen;
   $('#pg_lg').textContent = pgOpen ? '收起日志' : '查看日志';
 }
 function pgLog(){ pgOpen = !pgOpen; pgShow($('#pg_t').textContent, $('#pg_s').textContent); }
+/* Another meeting is another story: a finished panel from the last one must not sit here. */
+function pgIdle(){
+  if (jobId) return;
+  pgState = 'run'; pgOpen = false;
+  flow = {sub:'', t0:0, step:0, of:0};
+  $('#res_prog').hidden = true;
+}
 /* _chain.py prints "--- step i/N: <script>"; that is the real phase, so read it rather
    than inventing a percentage */
-const PHASE = {'asr.py':'转写音频', 'build.py':'整理逐字稿', 'report.py':'生成事实清单',
-               'finalize.py':'收尾', 'llm.py':'让模型写正文'};
+const PHASE = {'asr.py':'转写音频', 'diarize.py':'分离说话人', 'whois.py':'认出说话人',
+               'build.py':'整理逐字稿', 'llm.py':'让模型写正文',
+               'translate.py':'译成另一种语言', 'report.py':'生成事实清单',
+               'finalize.py':'收尾'};
 function pgFeed(j){
   const lines = j.lines || [];
   let phase = '', step = 0, of = 0, last = '';
@@ -3000,6 +3032,7 @@ function watch(j, host){
   // now folded inside the progress panel next to the chips, where the state already is.
   if (logEl.id === 'hlog'){ logEl.hidden = false; logEl.scrollIntoView({block:'nearest'}); }
   if (!flow.t0) flow = {sub:'正在启动…', t0:Date.now(), step:0, of:0};
+  pgState = 'run'; pgShow('正在处理', flow.sub);
   if (!tJob) tJob = setInterval(pollJob, 700);
 }
 async function pollJob(){
@@ -3011,9 +3044,14 @@ async function pollJob(){
   if (logEl.id === 'jlog'){ pgFeed(j); drawSteps(ses(cur) || {duration_s:0}); }
   if (j.state !== 'running'){
     clearInterval(tJob); tJob = null; jobId = null;
-    flow = {sub:'', t0:0, step:0, of:0};
-    if (j.state === 'done') $('#res_prog').hidden = true;   // failed: keep the log reachable
-    else { pgOpen = true; pgShow('执行失败', '日志在下方'); }
+    const secs = j.elapsed || 0, of = flow.of;
+    const mm = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    flow = {sub:'', t0:0, step:0, of:of};
+    if (j.state === 'done'){
+      pgState = 'ok';
+      pgShow('已完成', (of ? `${of} 个步骤全部走完 · ` : '') + `用了 ${mm}`);
+    } else { pgState = 'bad'; pgOpen = true; pgShow('执行失败', '日志在下方'); }
+    $('#pg_e').textContent = mm;
     const kind = jobKind; jobKind = null;
     CF = null;                       // whatever the job wrote, re-read it from disk
     await refresh(0);
@@ -3176,7 +3214,7 @@ function pick(name){
   cur = name; tabAuto = true; noAuto = false;
   document.body.classList.remove('sesopen');
   docSig = null;
-  markOn(); drawCur(); drawState(); go('meet');
+  pgIdle(); markOn(); drawCur(); drawState(); go('meet');
 }
 async function doProcess(name){
   cur = name; drawCur();
@@ -3259,6 +3297,7 @@ addEventListener('message', e => {
   if (e.data && e.data.mmt === 'paper-ready'){ pushTheme(); pushLang(); }
 });
 setTheme(document.documentElement.dataset.theme || 'dark');
+$('#ver').textContent = 'v' + UI_VERSION;   // one literal, put where it can be read off
 gutInit();
 placeDoc();
 try { setLangUI(localStorage.getItem('mmt.uilang') || 'zh'); } catch(e){}

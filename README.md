@@ -209,7 +209,7 @@ the top of the call that you are taking notes with an assistant.
 | rebuild one meeting's page | `cd mmt && python report.py "<session dir>" --me "Your Name"` |
 | recover a crashed session | `cd mmt && python finalize.py --scan` |
 | delete a meeting for good | `cd mmt && python purge.py "<session dir>"` (wavs + screen.mp4; `--frames` drops the pictures too) |
-| update | pull, then `python install.py` again. Your config and glossary live outside the program directory and survive. |
+| update | pull, then `python install.py` again. Your config and glossary live outside the program directory and survive. The version next to the logo should change; [CHANGELOG.md](CHANGELOG.md) says what is in it. |
 
 ## License
 
@@ -365,7 +365,7 @@ Python 3.10 以上；环境加语音模型约占 2.5 GB 磁盘；**不需要显�
 | 重新生成某场会的纪要页 | `cd mmt && python report.py "<会话目录>" --me "你的名字"` |
 | 崩溃后救回一场会 | `cd mmt && python finalize.py --scan` |
 | 彻底删除一场会 | `cd mmt && python purge.py "<会话目录>"`（wav + screen.mp4；加 `--frames` 连关键帧也删）|
-| 更新 | 拉一下代码，再跑一次 `python install.py`。配置和词库在程序目录之外，不会丢。 |
+| 更新 | 拉一下代码，再跑一次 `python install.py`。配置和词库在程序目录之外，不会丢。重开后标题栏 logo 右边的版本号会变，改了什么见 [CHANGELOG.md](CHANGELOG.md)。 |
 
 ## 开源许可
 

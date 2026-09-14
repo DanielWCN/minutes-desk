@@ -39,10 +39,14 @@ import outlook
 
 HERE = Path(__file__).resolve().parent
 
+# One number for the whole tool, so that "which version are you on" has an answer a
+# colleague can read off the title bar. Third digit for a fix, second for a new feature,
+# first for a change of shape. Every release is listed in CHANGELOG.md.
+#
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
-# bugs. Bump this whenever app.py changes shape, and the page will say so out loud.
-BUILD = "2026-09-14h"
+# bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
+VERSION = "1.0.0"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
@@ -474,7 +478,7 @@ class H(BaseHTTPRequestHandler):
             fresh = float(q.get("doctor", ["0"])[0]) == 1 or _doc_cache["data"] is None
             if fresh:
                 _doc_cache.update(at=time.time(), data=doctor.run(cfg))
-            self._json({"build": BUILD,
+            self._json({"version": VERSION,
                         "config": cfg, "doctor": _doc_cache["data"],
                         "sessions": list_sessions(cfg),
                         "recording": self._rec_status(),
@@ -1181,7 +1185,7 @@ def serve(port: int = 8760, open_browser: bool = True) -> int:
         firstrun.ensure(log=lambda s: print(f"  {s}"))
     except Exception as e:                                   # noqa: BLE001
         print(f"first-run setup skipped: {e}")
-    print(f"Minutes Desk {BUILD}  ->  {url}\nclose this window to stop the app")
+    print(f"Minutes Desk v{VERSION}  ->  {url}\nclose this window to stop the app")
     if open_browser:
         threading.Timer(0.7, lambda: webbrowser.open(url)).start()
     try:
