@@ -918,7 +918,7 @@ class H(BaseHTTPRequestHandler):
             return {"error": f"{name} 没有 screen.mp4（录制时没勾录屏）"}
         argv = [PY, "-u", str(HERE / "frames.py"), str(d),
                 "--max", str(b.get("max") or 150),
-                "--diff", str(b.get("diff") or 0.06)]
+                "--diff", str(b.get("diff") or 0.02)]
         return start_job(f"抽帧 {name}", argv)
 
 

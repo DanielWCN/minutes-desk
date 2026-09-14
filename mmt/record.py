@@ -204,21 +204,34 @@ class ScreenGrab(threading.Thread):
     already-composed image, so whatever is on screen is what lands in the file. During a demo
     the screen is visible anyway, so that costs nothing.
 
-    Measured on a 1707x960 display at these defaults (3 fps, crf 32, 1280 wide): 226 MB/hour,
-    which is the same order as the two audio tracks we already keep (232 MB/hour). The cursor
-    is drawn on purpose - a demo without the pointer is unreadable.
+    Measured at these defaults (3 fps, crf 32, 1280 wide): 226 MB/hour from a 1707x960
+    display, 343 MB/hour from a 1920x1200 one. Same order as the two audio tracks we already
+    keep (232 MB/hour). The cursor is drawn on purpose - a demo without the pointer is
+    unreadable.
+
+    Timestamps come from the wall clock, not from a frame counter. gdigrab does not promise
+    exactly `fps` frames a second, so numbering frames 0,1,2... drifts away from the audio;
+    and leaving pts as None is worse still - libav then writes 0 into every single frame, the
+    container reports a 0.3 second video, and every key frame frames.py extracts is stamped
+    00:00:00, which is the one thing the pictures are for.
+
+    A private range stops the capture too. Muting the transcript while still filming the
+    screen would be a promise the tool does not keep.
     """
 
     def __init__(self, path: Path, stop: threading.Event, state: dict,
-                 fps: int = 3, crf: int = 32, width: int = 1280):
+                 fps: int = 3, crf: int = 32, width: int = 1280,
+                 private: dict | None = None):
         super().__init__(daemon=True)
         self.path, self.stop, self.state = path, stop, state
         self.fps, self.crf, self.width = fps, crf, width
-        self.frames, self.error = 0, None
+        self.private = private
+        self.frames, self.dropped, self.error = 0, 0, None
 
     def run(self) -> None:
         try:
             import av
+            from fractions import Fraction
         except Exception as exc:                               # noqa: BLE001
             self.error = f"PyAV unavailable: {exc}"
             self.state["video_error"] = self.error
@@ -234,13 +247,25 @@ class ScreenGrab(threading.Thread):
             oc = av.open(str(self.path), "w")
             os_ = oc.add_stream("libx264", rate=self.fps)
             os_.width, os_.height, os_.pix_fmt = w, h, "yuv420p"
+            tb = Fraction(1, 1000)                             # milliseconds, see the docstring
+            os_.time_base = tb
             os_.options = {"crf": str(self.crf), "preset": "veryfast", "tune": "stillimage"}
             self.state["video_size"] = f"{w}x{h}"
+            t0 = None
+            last_pts = -1
             for frame in ic.decode(ist):
                 if self.stop.is_set():
                     break
+                if t0 is None:
+                    t0 = _now()                                # anchor: frame 1 of the video
+                if self.private is not None and self.private.get("on"):
+                    self.dropped += 1                          # filmed nothing; the gap shows
+                    self.state["video_dropped"] = self.dropped
+                    continue
                 f = frame.reformat(width=w, height=h, format="yuv420p")
-                f.pts = None
+                pts = max(last_pts + 1, int((_now() - t0) * 1000))
+                last_pts = pts
+                f.pts, f.time_base = pts, tb
                 for pkt in os_.encode(f):
                     oc.mux(pkt)
                 self.frames += 1
@@ -399,7 +424,7 @@ def main() -> int:
             print("\n  video already recording\n")
             return
         g = ScreenGrab(session / "screen.mp4", stop, state,
-                       args.video_fps, args.video_crf, args.video_width)
+                       args.video_fps, args.video_crf, args.video_width, private)
         g.start()
         grab_ref.update(g=g, start_s=round(elapsed(), 2))
         state["video_on"] = True
@@ -415,7 +440,8 @@ def main() -> int:
             private["on"] = True
             private["since"] = elapsed()
             marks.append({"kind": "private_start", "t": round(elapsed(), 2)})
-            print(f"\n  [{_hms(elapsed())}] PRIVATE ON - this part is cut from the transcript\n")
+            print(f"\n  [{_hms(elapsed())}] PRIVATE ON - cut from the transcript"
+                  f"{', screen capture paused' if grab_ref['g'] is not None else ''}\n")
 
     def keys() -> None:
         while not stop.is_set():
@@ -534,6 +560,7 @@ def main() -> int:
         "endpoint_switches": (wd.switches if wd else []),
         "last_probe": state.get("last_probe"),
         "video": ({"file": "screen.mp4", "frames": grab_ref["g"].frames,
+                   "dropped_private": grab_ref["g"].dropped,
                    "fps": args.video_fps, "crf": args.video_crf,
                    "size": state.get("video_size", ""),
                    "bytes": state.get("video_bytes", 0),
@@ -567,7 +594,9 @@ def main() -> int:
         if v["error"]:
             print(f"  video    !! failed: {v['error']}")
         else:
-            print(f"  video    {v['frames']} frames  {v['size']}  {v['bytes']/1e6:.1f} MB")
+            print(f"  video    {v['frames']} frames  {v['size']}  {v['bytes']/1e6:.1f} MB"
+                  + (f"  ({v['dropped_private']} dropped in private ranges)"
+                     if v.get("dropped_private") else ""))
     if meta["endpoint_switches"]:
         print(f"  endpoint switches: {meta['endpoint_switches']}")
     if susp.events:

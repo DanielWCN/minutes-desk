@@ -66,6 +66,31 @@ sessions/2026-05-04_1430_project-review/
 `minutes.html` is the deliverable. It is styled to look like the message the recipient
 will actually receive, so what you proofread is what they read.
 
+## Recording the screen (optional, off by default)
+
+Audio alone loses the thing everyone was actually looking at. Turn it on in settings, with the
+checkbox before you start, or with `v` mid-meeting; you get `screen.mp4` next to the two audio
+tracks.
+
+Read this before you use it: **it films the whole desktop, not just the meeting window.** That
+is deliberate, not laziness. A hardware-composited window (a video canvas in most meeting apps)
+comes back solid black when you ask Windows for that window's pixels, so the only capture that
+reliably works is the desktop. Anything else open is in the file. Close it first.
+
+Deliberately cheap: 3 fps, quality 32, scaled to 1280 px wide, no audio in the mp4. Measured on
+a 1920x1200 desktop: **343 MB per hour**. A private range (`p`) pauses the capture as well as
+cutting the transcript, and `session.json` records how many frames were dropped that way, so the
+gap is accounted for rather than silent.
+
+Nobody watches an hour of video, so afterwards press **Extract key frames**. It keeps one picture
+per visible change (`--diff 0.02`, a mean over the whole desktop) and names each one with the
+meeting clock, so a picture lines up with the line in the transcript. `--max 150` is a budget,
+not a stop sign: when it fills, the least-changed half is dropped and the bar rises, so the end
+of a long meeting is still covered. You also get contact sheets, a whole meeting in a few images.
+
+One known limit: two monitors are captured as one wide image and then squeezed into the same
+1280 px, which makes text unreadable. Undock, or leave it off.
+
 ## Who writes the minutes
 
 The tool ships with no language model inside it and never will: a meeting transcript is the
@@ -200,6 +225,27 @@ python install.py          # 两条路实际上跑的都是这一句
 | 本机 Ollama | 同一种接口，跑在 `127.0.0.1:11434`，完全离线。 | 装 Ollama、拉模型 |
 
 第一次把地址指向不在本机的服务时，它会明确告诉你并让你确认一次。这是故意加的摩擦。
+
+## 录屏（可选，默认关）
+
+只有声音，会丢掉大家当时到底在看什么。设置里开、开始前勾选、或者会议中按 `v` 都行，录完在
+两条音轨旁边多一个 `screen.mp4`。
+
+用之前先看这句：**它录的是整个桌面，不是会议窗口。** 这是故意的，不是偷懒。会议软件的画面
+多半由显卡合成，去问 Windows 要这个窗口的像素，拿回来是一整块黑，所以唯一稳定能录到画面的
+办法就是录桌面。屏幕上还开着什么，就都在文件里。先关掉。
+
+参数刻意压得很低：3 帧每秒、质量 32、缩到 1280 像素宽、mp4 里不含声音。在 1920x1200 的桌面
+上实测：**每小时 343 MB**。隐私段（`p`）除了从逐字稿里切掉，也会同时暂停录屏，
+`session.json` 里记着这段丢了多少帧 —— 这个空洞是有账的，不是悄悄少了一截。
+
+没人会去看一小时的录像，所以录完点**提取关键帧**。画面每变一次留一张图（`--diff 0.02`，按
+整个桌面取均值），文件名带的是会议时钟，所以一张图能对上逐字稿的哪一行。`--max 150` 是预算
+不是刹车：满了就把变化最小的一半删掉、门槛抬高，长会议的后半段照样有图。另外还会拼出联系
+表，一整场会几张图看完。
+
+已知的一个限制：两块屏会被当成一张宽图，再压进同样的 1280 像素，字就看不清了。要么拔线，
+要么别开。
 
 ## 词库分两层
 

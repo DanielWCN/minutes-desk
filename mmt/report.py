@@ -591,8 +591,9 @@ def main() -> int:
         if (ses / "session.json").exists() else {}
     rep = json.loads((ses / "transcribe_report.json").read_text(encoding="utf-8")) \
         if (ses / "transcribe_report.json").exists() else {}
-    frames = json.loads((ses / "frames.json").read_text(encoding="utf-8")) \
-        if (ses / "frames.json").exists() else []
+    fj = ses / "frames" / "frames.json"      # frames.py writes it beside the PNGs
+    frames = (json.loads(fj.read_text(encoding="utf-8")).get("frames") or []) \
+        if fj.exists() else []
     spkinfo = json.loads((ses / "speakers.json").read_text(encoding="utf-8")) \
         if (ses / "speakers.json").exists() else {}
 
