@@ -32,6 +32,7 @@ import archive
 import config
 import doctor
 import llm
+import minutes as M
 import outlook
 
 HERE = Path(__file__).resolve().parent
@@ -39,7 +40,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Bump this whenever app.py changes shape, and the page will say so out loud.
-BUILD = "2026-09-14d"
+BUILD = "2026-09-14e"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
@@ -308,6 +309,28 @@ def _openable(cfg: dict, p: Path) -> bool:
 
 
 # ------------------------------------------------------------------------------------- api
+def _draft_step(cfg: dict, d: Path) -> list:
+    """
+    The chain step that writes the minutes with a model, or nothing at all.
+
+    Nothing at all in two cases. On the `assistant` engine there is no model to call: the
+    person holds the prompt and pastes the answer back, by design. And once minutes.md says
+    something a person wrote or approved, a rebuild must not quietly replace it -- pressing
+    "generate documents" again is a request to re-render, not to re-write. So the model is
+    only let near a file that is still the untouched scaffold, or missing.
+    """
+    if (cfg.get("engine") or "assistant") == "assistant":
+        return []
+    md = d / "minutes.md"
+    if md.exists():
+        try:
+            if not M.is_scaffold(md.read_text(encoding="utf-8")):
+                return []
+        except OSError:
+            return []
+    return [["?", PY, "-u", str(HERE / "llm.py"), str(d), "--draft", "--no-report"]]
+
+
 class H(BaseHTTPRequestHandler):
     server_version = "MeetingTool"
 
@@ -695,6 +718,11 @@ class H(BaseHTTPRequestHandler):
         steps = [asr_argv, [PY, "-u", str(HERE / "build.py"), str(d)]]
         if others:
             steps[1] += ["--others", others]
+        # A model that is already configured should not need a second click. The draft runs
+        # inside the chain, before the document is rendered, so one press turns a recording
+        # into minutes. It is a soft step: no network, no key, no local server, still a
+        # transcript and still a document.
+        steps += _draft_step(cfg, d)
         steps.append([PY, "-u", str(HERE / "report.py"), str(d)]
                      + (["--me", cfg["me"]] if cfg.get("me") else []))
         return start_job(f"处理 {name}", [PY, "-u", str(HERE / "_chain.py"),
@@ -1040,6 +1068,7 @@ class H(BaseHTTPRequestHandler):
         steps = [[PY, "-u", str(HERE / "build.py"), str(d)]]
         if others:
             steps[0] += ["--others", others]
+        steps += _draft_step(cfg, d)
         steps.append([PY, "-u", str(HERE / "report.py"), str(d)]
                      + (["--me", cfg["me"]] if cfg.get("me") else []))
         return start_job(f"生成文档 {name}", [PY, "-u", str(HERE / "_chain.py"),

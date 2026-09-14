@@ -384,6 +384,8 @@ def main() -> int:
     ap.add_argument("--file", default="minutes.md")
     ap.add_argument("--print-prompt", action="store_true")
     ap.add_argument("--draft", action="store_true")
+    # the processing chain renders the document itself, one step later
+    ap.add_argument("--no-report", action="store_true")
     ap.add_argument("--ping", action="store_true")
     ap.add_argument("--detect", action="store_true")
     args = ap.parse_args()
@@ -428,6 +430,8 @@ def main() -> int:
                          ensure_ascii=False, indent=2))
         if not r.get("ok"):
             return 1
+        if args.no_report:
+            return 0
         print("--- step 2/2: report.py")
         argv = [sys.executable, "-u", str(HERE / "report.py"), str(ses)]
         if cfg.get("me"):
