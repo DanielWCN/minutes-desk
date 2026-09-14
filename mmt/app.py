@@ -42,7 +42,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Bump this whenever app.py changes shape, and the page will say so out loud.
-BUILD = "2026-09-14g"
+BUILD = "2026-09-14h"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
@@ -367,6 +367,21 @@ def _draft_step(cfg: dict, d: Path) -> list:
         except OSError:
             return []
     return [["?", PY, "-u", str(HERE / "llm.py"), str(d), "--draft", "--no-report"]]
+
+
+def _translate_step(cfg: dict, d: Path) -> list:
+    """The chain step that writes the other language, or nothing at all.
+
+    The decision cannot be made here. These steps are assembled before the chain starts,
+    and on a first run minutes.md does not exist yet -- it is written by the step above
+    this one. So the step is always added when a model can be called, and translate.py
+    decides for itself: no minutes, a blank scaffold, or a translation that is already on
+    disk all end in an immediate no-op. Soft, like the draft: a translation that fails
+    still leaves a transcript, a set of minutes and a document.
+    """
+    if not llm.can_auto(cfg):
+        return []
+    return [["?", PY, "-u", str(HERE / "translate.py"), str(d)]]
 
 
 class H(BaseHTTPRequestHandler):
@@ -766,6 +781,7 @@ class H(BaseHTTPRequestHandler):
         # into minutes. It is a soft step: no network, no key, no local server, still a
         # transcript and still a document.
         steps += _draft_step(cfg, d)
+        steps += _translate_step(cfg, d)
         steps.append([PY, "-u", str(HERE / "report.py"), str(d)]
                      + (["--me", cfg["me"]] if cfg.get("me") else []))
         return start_job(f"处理 {name}", [PY, "-u", str(HERE / "_chain.py"),
@@ -1116,6 +1132,7 @@ class H(BaseHTTPRequestHandler):
             bld += ["--others", others]
         steps = _speaker_steps(cfg, d) + [bld]
         steps += _draft_step(cfg, d)
+        steps += _translate_step(cfg, d)
         steps.append([PY, "-u", str(HERE / "report.py"), str(d)]
                      + (["--me", cfg["me"]] if cfg.get("me") else []))
         return start_job(f"生成文档 {name}", [PY, "-u", str(HERE / "_chain.py"),

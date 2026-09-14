@@ -4,7 +4,8 @@
 它只能把 `minutes.md` 的骨架搭好，再把逐字稿摆在旁边。
 
 流程是：工具产出 `transcript.md` + 空的 `minutes.md` 骨架 → 你把这个文件和材料一起
-交给 AI 助手 → AI 助手填 `minutes.md`（和 `minutes.zh.md`）→ 回工具里重跑「生成纪要」。
+交给 AI 助手 → AI 助手填 `minutes.md` → 回工具里重跑「生成纪要」。
+中文版 `minutes.zh.md` 不用你写：工具会把写完的 `minutes.md` 逐条译过去。
 
 ## 然后对 AI 助手说
 

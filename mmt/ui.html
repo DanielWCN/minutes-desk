@@ -545,7 +545,7 @@ textarea:focus{outline:none;border-color:var(--primary-hi);
 .grp h4{margin:0;font-size:13px;font-weight:600;color:var(--text)}
 .grp i{font-style:normal;font-size:11.5px;color:var(--faint)}
 .grp .f1{flex:1}
-.grp .tag{flex:none}
+.grp .tag,.grp .msg{flex:none}
 
 /* who was in the room: one tick box per invited name */
 .att{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:2px 14px}
@@ -1211,9 +1211,15 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
         <div class="pn" id="pn_fix" hidden>
           <div id="res_cfm" hidden>
             <div class="stg" id="c_awrap">
+            <!-- The save lives in the group heading, not under the fields. Everything in
+                 this group is a change worth keeping, and a button that sits below the last
+                 field is a button you only find after you have scrolled past it. -->
             <div class="grp"><u>1</u><h4>参加会议的人</h4>
               <span class="f1"></span>
-              <button class="btn sm" id="c_inv" onclick="pullInvite()">从 Outlook 读取邀请</button></div>
+              <span class="msg" id="c_msg2"></span>
+              <button class="btn sm" id="c_inv" onclick="pullInvite()">从 Outlook 读取邀请</button>
+              <button class="btn sm" onclick="doConfirm(1)"
+                title="记下这一页：与会人的勾选、名字的改写、会议名称、词语的决定。不生成文档">保存这一页</button></div>
             <div class="att" id="c_att"></div>
             <div class="hint" id="c_ahint"></div>
             <!-- Two different jobs, two different controls: the tick decides who was there,
@@ -1226,14 +1232,6 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
             <div class="fitem" style="margin-top:10px">
               <label for="c_title">会议名称<i>留空则用默认名，也用作邮件主题</i></label>
               <input type="text" id="c_title" oninput="cfEdit('title')">
-            </div>
-            <!-- The same save as the one at the foot of the page. It is repeated here
-                 because this is the group where a person makes changes worth keeping, and
-                 the foot of a long page is not where they look for the button. -->
-            <div class="row" style="margin-top:10px">
-              <button class="btn sm" onclick="doConfirm(1)"
-                title="记下这一页：与会人的勾选、名字的改写、会议名称、词语的决定。不生成文档">保存这一页</button>
-              <span class="msg" id="c_msg2"></span>
             </div>
             </div>
 
@@ -1376,7 +1374,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Bumped together with BUILD in app.py. The same string on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_BUILD = '2026-09-14g';
+const UI_BUILD = '2026-09-14h';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];

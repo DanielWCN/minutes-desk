@@ -623,18 +623,26 @@ def main() -> int:
                 md0.unlink()
         except OSError:
             pass
+    # Which language minutes.md itself is in. It stays the one the page opens on, however
+    # many translations sit beside it: the other file is a translation OF this one, and the
+    # sheet a person copies into a mail must be the one they read and approved.
+    primary = "en"
     for fn, forced in (("minutes.md", None), ("minutes.zh.md", "zh"),
                        ("minutes.en.md", "en")):
         fp = ses / fn
         if fp.exists():
             d = M.load(fp)
-            docs.setdefault(forced or (d["meta"].get("lang") or "en"), d)
+            key = forced or (d["meta"].get("lang") or "en")
+            docs.setdefault(key, d)
+            if fn == "minutes.md":
+                primary = key
     scaffolded = False
     if not docs:
         (ses / "minutes.md").write_text(M.scaffold(ses, tr, meta, args.me), encoding="utf-8")
         docs["en"] = M.load(ses / "minutes.md")
+        primary = "en"
         scaffolded = True
-    prime = docs.get("en") or next(iter(docs.values()))
+    prime = docs.get(primary) or docs.get("en") or next(iter(docs.values()))
     fm = prime["meta"]
 
     has_audio = (ses / "mic.wav").exists() or (ses / "others.wav").exists()
@@ -854,7 +862,7 @@ def main() -> int:
         + f'</summary><div class="bdy">{b}</div></details>' for t, n, b in ap_)
 
     orig = "zh" if en2 else "en"
-    deflang = "zh" if "zh" in docs else next(iter(docs))
+    deflang = primary if primary in docs else next(iter(docs))
     seg = ('<div class="seg">'
            '<button data-lg="zh" onclick="setLang(\'zh\')">中文</button>'
            '<button data-lg="en" onclick="setLang(\'en\')">English</button></div>'

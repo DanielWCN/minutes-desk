@@ -81,6 +81,7 @@ sessions/2026-05-04_1430_project-review/
   speakers.json              which voice is which person, with the evidence for each
   minutes.json               the facts: attendees, decisions, action items, open questions
   minutes.md                 the body, written by a language model (see below)
+  minutes.zh.md              the same minutes in the other language, translated not rewritten
   minutes.html              one page, print-clean, with a "copy the email body" button
 ```
 
@@ -128,6 +129,19 @@ choice. Three options, chosen in the settings page:
 
 The first time you point it at an endpoint that is not on this machine, it says so and
 asks you to confirm, once. That is deliberate friction, not a bug.
+
+### The same minutes in the other language
+
+Once a model can be called, the minutes are written twice: the finished `minutes.md` is
+translated into `minutes.zh.md` (or `minutes.en.md` when you wrote in Chinese), item for
+item. A translation, not a second summary - same decisions, same action rows, same owners,
+same dates - because two summaries written independently from one transcript will disagree,
+and the disagreement is invisible to anyone who reads only one of them. Names keep the
+spelling from the attendee list, and every term in the glossary keeps its original form, so
+the vocabulary the team argues in survives the trip. The header is not translated at all: it
+is rebuilt from the original, so the date, the duration and the distribution list cannot
+drift. The document carries both, one click apart, and opens on the language you wrote.
+Delete the file to have it made again.
 
 ## The glossary, in two layers
 
@@ -273,6 +287,17 @@ python install.py          # 两条路实际上跑的都是这一句
 
 这一条故意放在用户文件里而不是代码里：每个助手的参数不一样，而一个会自己
 启动磁盘上找到的程序的工具，活该被怀疑。
+
+### 另一种语言的同一份纪要
+
+能自动调模型时，纪要会出两份：写完的 `minutes.md` 被逐条译成
+`minutes.zh.md`（原文就是中文时，译成 `minutes.en.md`）。是翻译，不是再总结一次
+—— 决定几条就是几条，行动项几行就是几行，负责人和日期一字不改。同一份逐字稿
+写两次总结，两份一定对不上，而只读一份的人永远看不到这个矛盾。人名按与会人名单里
+的写法原样保留，词库里的术语也一律保留原词，因为团队开会时就是这么说的。报头
+那一段根本不经过模型：它是从原文逐行重建的，日期、时长、收件人名单不会跑偏。
+文档里两份都在，差一下点击，默认打开的是你当时写的那一种。删掉译文文件，下次
+生成文档时会重新译一遍。
 
 ## 录屏（可选，默认关）
 
