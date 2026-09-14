@@ -2,7 +2,7 @@
 Merge the transcribed tracks into one human-readable transcript, then apply the
 glossary. Pure text work, no models.
 
-Phase 1 speakers:  mic.wav -> you,  others.wav -> "Others"
+Phase 1 speakers:  mic.wav -> you,  others.wav -> one label (a name in a 1:1, else "Others")
 Phase 2 will replace "Others" with real names from diarization + the Outlook roster.
 Anything the pipeline is unsure about is marked, never silently guessed.
 """
@@ -296,6 +296,26 @@ def in_private(seg: dict, ranges: list[tuple[float, float]]) -> tuple[float, flo
     return None
 
 
+def track_label(s: str, default: str = "Others") -> str:
+    """
+    One short label for the loopback track.
+
+    In a 1:1 the name that comes in is exact and is used as given. A meeting invite for
+    twenty-seven people is a different animal: it is a roster, it names nobody in
+    particular, and it was arriving here as the speaker label. Every line of the
+    transcript then carried four hundred characters of other people's names, the talk-time
+    header read "<the whole roster> 26.0 min", and in the confirm desk the roster filled
+    the row where the sentence was supposed to be. The roster is still kept, in
+    session.json, as the attendee list, which is what it actually is.
+    """
+    s = " ".join(str(s or "").split())
+    if not s:
+        return default
+    if len(re.split(r"[;,\u3001]", s)) > 1 or len(s) > 24:
+        return default
+    return s
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("session")
@@ -309,6 +329,7 @@ def main() -> int:
                     help="split a segment wherever the speaker paused this long (seconds); "
                          "0 keeps Whisper's own segment boundaries")
     args = ap.parse_args()
+    args.others = track_label(args.others)      # a roster is not a speaker name
     ses = Path(args.session)
     if args.split_gap <= 0:
         args.split_gap = 1e9

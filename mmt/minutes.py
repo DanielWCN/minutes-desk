@@ -243,9 +243,27 @@ Not what was discussed: what came out of it. Name people; never write "I" or "yo
 # The rules an author (or an AI) has to follow are in profiles/minutes.md.
 
 
+def _people(meta: dict, talk: dict, me: str) -> list[str]:
+    """
+    The names of the other people in the meeting, one per entry.
+
+    The attendee list belongs to the invite (and to the tick boxes on the confirm desk,
+    which write back into it), NOT to the speaker labels: the loopback track carries a
+    single label for everybody at the far end, so reading names off it produced an
+    "attendee" that was twenty-seven names in one line, and an "organizer" that was the
+    same twenty-seven names again.
+    """
+    names = [n.strip() for n in re.split(r"[;,\u3001\n]+", str(meta.get("others") or ""))
+             if n.strip()]
+    if names:
+        return names
+    skip = {"you", "others", "me", (me or "").lower()}
+    return [k for k in sorted(talk, key=lambda k: -talk[k]) if k.lower() not in skip]
+
+
 def scaffold(ses: Path, tr: dict, meta: dict, me: str = "") -> str:
     talk = tr.get("talk_time_s") or {}
-    who = [k for k, _ in sorted(talk.items(), key=lambda kv: -kv[1])]
+    people = _people(meta, talk, me)
     started = str(meta.get("started_local") or "")
     date, _, clock = started.partition("T")
     dur = (meta.get("duration_s") or 0) / 60
@@ -253,8 +271,10 @@ def scaffold(ses: Path, tr: dict, meta: dict, me: str = "") -> str:
         title=tr.get("title") or meta.get("title") or ses.name,
         date=date or "TBD", time=clock[:5] or "TBD",
         duration=f"{dur:.0f} min" if dur else "TBD",
-        organizer=who[0] if who else "TBD",
-        attendees="\n".join(f"  - {w}" for w in who) or "  - TBD",
-        distribution=", ".join(w for w in who if w.lower() not in ("you", me.lower())) or "TBD",
+        # who called the meeting is not something the audio knows: in a 1:1 there is only
+        # one candidate, in a group meeting a guess would be wrong more often than right
+        organizer=people[0] if len(people) == 1 else "TBD",
+        attendees="\n".join(f"  - {w}" for w in ([me or "You"] + people)) or "  - TBD",
+        distribution=", ".join(people) or "TBD",
         subject=f"Meeting notes | {tr.get('title') or ses.name} | {date}",
         me=me)

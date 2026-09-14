@@ -39,7 +39,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Bump this whenever app.py changes shape, and the page will say so out loud.
-BUILD = "2026-09-14a"
+BUILD = "2026-09-14b"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
@@ -819,6 +819,20 @@ class H(BaseHTTPRequestHandler):
             b = min(len(t), a + n)
             return ("…" if a else "") + t[a:b] + ("…" if b < len(t) else "")
 
+        def _spk(v) -> str:
+            """
+            A speaker label short enough to sit in front of a sentence.
+
+            Sessions built before the label fix carry the whole invite list as the speaker
+            of the loopback track, which pushed the excerpt out of the row entirely. Those
+            sessions are on disk and nobody is going to rebuild them, so a roster is read
+            here for what it is: the other end.
+            """
+            v = " ".join(str(v or "").split())
+            if len(re.split(r"[;,\u3001]", v)) > 1 or len(v) > 24:
+                return "\u5bf9\u65b9"
+            return v
+
         def where(surface: str) -> list[dict]:
             """
             Every place the word was heard, with the line before and after it.
@@ -835,14 +849,14 @@ class H(BaseHTTPRequestHandler):
                     continue
                 hits.append({
                     "at": float(l.get("start") or 0),
-                    "spk": str(l.get("speaker") or ""),
+                    "spk": _spk(l.get("speaker")),
                     "pre": _cut(lines[i - 1].get("text") if i else "", 240),
-                    "pre_spk": str(lines[i - 1].get("speaker") or "") if i else "",
+                    "pre_spk": _spk(lines[i - 1].get("speaker")) if i else "",
                     # short window for the collapsed row, a long one behind "expand"
                     "snip": _win(t, surface, 150),
                     "text": _win(t, surface, 700),
                     "post": _cut(lines[i + 1].get("text") if i + 1 < len(lines) else "", 240),
-                    "post_spk": (str(lines[i + 1].get("speaker") or "")
+                    "post_spk": (_spk(lines[i + 1].get("speaker"))
                                  if i + 1 < len(lines) else ""),
                 })
                 if len(hits) >= 4:

@@ -46,7 +46,8 @@ except Exception:                                    # pragma: no cover
 
 MRATIO_MIN = 70      # fuzzy ratio of the two metaphone codes (single word)
 MRATIO_MIN_MULTI = 80  # n-grams have more characters, so coincidence is likelier
-RATIO_MIN = 50       # plus a floor on raw spelling similarity, kills wild pairs
+RATIO_MIN = 60       # plus a floor on raw spelling similarity, kills wild pairs
+RATIO_MIN_MULTI = 70  # an n-gram matches on its shape too easily; ask for more spelling
 MIN_LEN = 5          # shorter tokens are too noisy to be worth annotating
 SAME_FIRST_SOUND = True   # the initial consonant is almost never mis-heard
 
@@ -56,7 +57,7 @@ SAME_FIRST_SOUND = True   # the initial consonant is almost never mis-heard
 #   real errors:        3.93  3.50  2.25   <- want these kept
 #   false positives:    4.84  4.79  4.65  4.51  4.37   <- want these gone
 # Person names are far rarer than jargon, so they get the stricter floor.
-ZIPF_MAX_TERM = 4.2
+ZIPF_MAX_TERM = 4.0
 ZIPF_MAX_NAME = 3.0
 
 # Measured on every real error and every observed false positive in that recording. Pairs
@@ -73,8 +74,55 @@ ZIPF_MAX_NAME = 3.0
 #   common adjective / product name         80  62.5  4.43   yes       drop (word too common)
 #   common verb / surname                  100  33.3  4.37   yes       drop (raw ratio +
 #                                                                            name floor)
+#
+# Re-calibrated on a real 33-minute meeting where every single row the desk produced was
+# wrong. Eight rows, and what each of them needed:
+#   ordinary word / product name            75  66.6  4.04*  yes  drop  *read across the
+#   the same word, plural                   86  71.4  4.04   yes  drop   inflections
+#   long word / short product name          73  52.6  3.82   yes  drop (raw ratio 60)
+#   two very common words / two-word term   86  60.9  n/a    yes  drop (raw ratio 70)
+#   name / another name                     75  54.5  0.00   yes  drop (raw ratio 60)
+#   plural / its own singular               91  95.0  1.17   yes  drop (same word)
+#   common word + name / two-word term      80  59.3  n/a    yes  drop (raw ratio 70)
+#   plural / its own singular               80  66.7  3.45   yes  drop (same word)
+# Every threshold above was moved to the value that kills these without touching any of
+# the four real errors in the older table: their raw ratios were 83.3, 62.5, 60.0, 80.0
+# and their frequencies 3.93, 2.25, 3.50, 1.61, so a floor of 60 on the raw ratio and a
+# ceiling of 4.0 on the frequency clear both sets with the boundary between them.
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'+-]*")
+
+# Crude English inflection. Two jobs, both learnt from a real meeting where the desk
+# offered eight substitutions and all eight were wrong:
+#   1. "headcounts -> headcount" and "queries -> query" are not mis-hearings, they are the
+#      same word in another number. Asking a person to decide that is noise.
+#   2. A plural is rarer than its singular, so the frequency guard let an ordinary word
+#      through in inflected form: "pipelines" measures zipf 3.43 and passes, while
+#      "pipeline" measures 4.04 and fails. The guard now reads the whole family and takes
+#      the commonest member, because an inflection of a common word is a common word.
+# Deliberately not a real lemmatiser: no dictionary, no dependency, and a wrong stem only
+# ever adds a candidate whose frequency is 0, which changes nothing.
+_SUFFIX = (("ies", "y"), ("ses", ""), ("es", ""), ("s", ""),
+           ("ing", ""), ("ing", "e"), ("ed", ""), ("ed", "e"))
+
+
+def _lemmas(w: str) -> set[str]:
+    """The word plus the plausible base forms it could be an inflection of."""
+    out = {w}
+    for suf, rep in _SUFFIX:
+        if w.endswith(suf) and len(w) - len(suf) >= 3:
+            out.add(w[:-len(suf)] + rep)
+    return out
+
+
+def _same_word(a: str, b: str) -> bool:
+    """True when the two differ only by an ending, e.g. queries / query."""
+    return bool(_lemmas(a.replace(" ", "")) & _lemmas(b.replace(" ", "")))
+
+
+def _zipf(n: str) -> float:
+    """How common the word is, read across its whole inflection family."""
+    return max(zipf_frequency(x, "en") for x in _lemmas(n))
 
 
 def _norm(s: str) -> str:
@@ -138,20 +186,23 @@ def annotate(text: str, vocab, seen: set[str] | None = None):
                 continue
             if n in known:                       # already a canonical term, leave alone
                 continue
-            zipf = zipf_frequency(n, "en") if size == 1 else 0.0
+            zipf = _zipf(n) if size == 1 else 0.0
             mn = metaphone(n)
             floor = MRATIO_MIN if size == 1 else MRATIO_MIN_MULTI
+            rfloor = RATIO_MIN if size == 1 else RATIO_MIN_MULTI
             best = None
             for canon, cn, cw, is_person in vocab:
                 if cw != size:
                     continue
+                if _same_word(n, cn):
+                    continue                     # same word, other ending: not a mis-hear
                 if zipf > (ZIPF_MAX_NAME if is_person else ZIPF_MAX_TERM):
                     continue                     # ordinary English word, not a mis-hear
                 mc = metaphone(cn)
                 if SAME_FIRST_SOUND and mn[:1] != mc[:1]:
                     continue                     # e.g. two common words that both mis-hear to one term
                 mr, rr = fuzz.ratio(mn, mc), fuzz.ratio(n, cn)
-                if mr >= floor and rr >= RATIO_MIN and (best is None or mr > best[1]):
+                if mr >= floor and rr >= rfloor and (best is None or mr > best[1]):
                     best = (canon, mr)
             if best:
                 used.append((s, e))
