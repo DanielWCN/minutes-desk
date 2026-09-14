@@ -216,7 +216,11 @@ body[data-l=zh] [data-pl=zh],body[data-l=en] [data-pl=en]{display:inline}
 .sheet[data-l]{display:none}
 body[data-l=en] .sheet[data-l=en],body[data-l=zh] .sheet[data-l=zh]{display:block}
 body[data-l=en][data-orig=en] .turn .z,body[data-l=zh][data-orig=zh] .turn .z{display:none}
-body[data-l=en][data-orig=zh] .turn .o,body[data-l=zh][data-orig=en] .turn .o{display:none}
+/* .tr marks a turn that HAS a translation. Only those hide their original when the page is
+   read in the other language: a line nobody translated then still shows the words that were
+   said, instead of an empty row. The minutes can be bilingual while the verbatim is not. */
+body[data-l=en][data-orig=zh] .turn.tr .o,
+body[data-l=zh][data-orig=en] .turn.tr .o{display:none}
 body.pair[data-l][data-orig] .turn .o,
 body.pair[data-l][data-orig] .turn .z{display:block}
 body.pair .tx .turn{grid-template-columns:74px 1fr 1fr}
@@ -741,8 +745,9 @@ def main() -> int:
         flush(st)
         spk = l.get("speaker") or "?"
         idx = pal.index(base(spk)) % 6
-        cls = "turn g%d" % idx + (" flag" if l.get("low_conf") else "")
         z = alt.get(int(st))
+        cls = ("turn g%d" % idx + (" flag" if l.get("low_conf") else "")
+               + (" tr" if z else ""))
         turns.append(
             f'<div class="{cls}" id="L{round(st*10)}">'
             f'<div class="m"><div class="who s{idx}">{e(spk)}</div>'
