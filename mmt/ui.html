@@ -749,7 +749,7 @@ body{font-size:13px}
 .wb.flush{overflow:hidden;padding:0;display:flex}
 .wb.flush>.pn{padding:0;flex:1;min-height:0;display:flex}
 /* the one button that ends the confirm desk stays reachable without scrolling */
-.cfmgo{position:sticky;bottom:-20px;z-index:2;background:var(--bg);
+.cfmgo{position:sticky;bottom:0;z-index:2;background:var(--bg);
   padding:12px 0;margin-top:18px;border-top:1px solid var(--line)}
 
 /* ---- panels stop being cards inside cards ------------------------- */
@@ -1115,7 +1115,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
             <div class="fitem">
               <label for="r_title">会议名称</label>
               <div class="row">
-                <input type="text" id="r_title" class="f1" placeholder="例如 Nexus capacity planning">
+                <input type="text" id="r_title" class="f1" placeholder="例如 Weekly capacity planning">
                 <button class="btn" id="olgo" onclick="olLoad()"
                   title="读本机 Outlook 今天的日历，选一场就填好名称和与会人">从 Outlook 载入</button>
                 <label class="dpick" id="oldaywrap" hidden>换一天
@@ -1226,6 +1226,14 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
             <div class="fitem" style="margin-top:10px">
               <label for="c_title">会议名称<i>留空则用默认名，也用作邮件主题</i></label>
               <input type="text" id="c_title" oninput="cfEdit('title')">
+            </div>
+            <!-- The same save as the one at the foot of the page. It is repeated here
+                 because this is the group where a person makes changes worth keeping, and
+                 the foot of a long page is not where they look for the button. -->
+            <div class="row" style="margin-top:10px">
+              <button class="btn sm" onclick="doConfirm(1)"
+                title="记下这一页：与会人的勾选、名字的改写、会议名称、词语的决定。不生成文档">保存这一页</button>
+              <span class="msg" id="c_msg2"></span>
             </div>
             </div>
 
@@ -1368,7 +1376,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Bumped together with BUILD in app.py. The same string on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_BUILD = '2026-09-14c';
+const UI_BUILD = '2026-09-14d';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2953,9 +2961,9 @@ async function doConfirm(saveOnly){
   $('#c_go').disabled = false;
   if (sv) sv.disabled = false;
   if (saveOnly){
-    $('#c_msg').textContent = r && r.saved
-      ? `已保存 ${r.at || ''}，与会人 ${keep.length} 人`
+    const t = r && r.saved ? `\u2713 已保存 ${r.at || ''}，与会人 ${keep.length} 人`
       : (r && r.error) || '保存失败';
+    ['#c_msg', '#c_msg2'].forEach(id => { const e = $(id); if (e) e.textContent = t; });
     return;
   }
   watch(r, '#jlog');

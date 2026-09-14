@@ -39,7 +39,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Bump this whenever app.py changes shape, and the page will say so out loud.
-BUILD = "2026-09-14c"
+BUILD = "2026-09-14d"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
