@@ -1376,7 +1376,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Bumped together with BUILD in app.py. The same string on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_BUILD = '2026-09-14e';
+const UI_BUILD = '2026-09-14f';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2278,14 +2278,18 @@ function drawDoc(){
 function wrtBar(s){
   if (!s || s.minutes_written) return '';
   const e = engCur();
-  const tip = e === 'assistant'
+  // "can it write this by itself" is the question, and on the assistant engine the answer
+  // depends on whether assistants.json gave that assistant a command line.
+  const auto = E ? !!E.can_auto : e !== 'assistant';
+  const who = (e === 'assistant' && E && E.assistant) ? E.assistant : ENAME[e];
+  const tip = !auto
     ? '当前引擎是<b>交给 AI 助手</b>：点「复制提示词」，粘给 AI 助手，再把 AI 助手回的整份内容用「粘回纪要」贴回来。'
-    : '当前引擎是<b>' + ENAME[e] + '</b>：点「生成纪要草稿」，写好后直接出现在这张纸上。';
+    : '当前引擎是<b>' + esc(who) + '</b>：点「生成纪要草稿」，写好后直接出现在这张纸上。以后录完直接点分析，这一步会自己跑。';
   return `<div class="wrt">
     <div class="w1"><b>正文还没写</b> · ${tip}</div>
     <div class="row">
-      ${e === 'assistant' ? '' : '<button class="btn pri" onclick="draftGo()">生成纪要草稿</button>'}
-      <button class="btn${e === 'assistant' ? ' pri' : ''}" onclick="promptCopy()">复制提示词</button>
+      ${auto ? '<button class="btn pri" onclick="draftGo()">生成纪要草稿</button>' : ''}
+      <button class="btn${auto ? '' : ' pri'}" onclick="promptCopy()">复制提示词</button>
       <button class="btn" onclick="pasteStart()">粘回纪要</button>
       <span class="f1"></span><span class="msg" id="wrtmsg"></span>
     </div></div>`;
@@ -2402,18 +2406,30 @@ function engDraw(){
   w.innerHTML = `
   <div class="eno${on('assistant')}">
     <div class="eh" onclick="engPick('assistant')"><u></u><b>交给 AI 助手</b>
-      ${E.assistant ? '<span class="tag green">已检测到 '
-                        + esc(E.assistant) + '</span>'
-                    : '<span class="tag green">无需安装</span>'}
-      <i>不联网、不装模型，逐字稿不出这台电脑</i></div>
+      ${E.assistant_cli
+        ? `<span class="tag green">${esc(E.assistant)} · 可自动调用</span>`
+        : E.assistant ? `<span class="tag green">已检测到 ${esc(E.assistant)}</span>`
+        : '<span class="tag green">无需安装</span>'}
+      <i>${E.assistant_cli
+        ? '录完点分析，纪要自己写好，不用复制粘贴'
+        : '不联网、不装模型，逐字稿不出这台电脑'}</i></div>
     <div class="eb">
+      ${E.assistant_cli ? `
+      <div class="hint"><b>${esc(E.assistant)}</b> 就在这台电脑上，
+        assistants.json 里又给了它的命令行（<code>${esc(E.assistant_exe)}</code>），
+        所以工具直接把提示词从 stdin 送进去、把整份正文从 stdout 接回来。
+        录完点一次分析，逐字稿、纪要、文档一次到位。</div>
+      <div class="hint">工具自己仍然不联网；那个助手会不会联网，
+        取决于它本身。不想让它自动跑，把 assistants.json 里的
+        <code>cli</code> 删掉就回到复制粘贴。</div>`
+      : `
       <div class="hint">这条路就是复制粘贴：工具把逐字稿和模板拼成一段提示词，你交给 AI 助手，
         AI 助手写好整份正文，你再贴回来。工具本身不发生任何网络请求。</div>
       <ol class="est">
-        <li>在右边「纪要」那一栏点<b>复制提示词</b></li>
+        <li>在右边「纪要」那一欄点<b>复制提示词</b></li>
         <li>粘给 AI 助手，等它回一份完整的 minutes.md</li>
-        <li>回到「纪要」那一栏点<b>粘回纪要</b>，贴进去即成文</li>
-      </ol>
+        <li>回到「纪要」那一欄点<b>粘回纪要</b>，贴进去即成文</li>
+      </ol>`}
     </div>
   </div>
   <div class="eno${on('api')}">

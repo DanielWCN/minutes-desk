@@ -1,5 +1,5 @@
 """
-The minutes engine. One HTTP shape, three ways to reach it.
+The minutes engine. One HTTP shape, three ways to reach it, plus a local process.
 
 The tool ships with no model inside it and never will: a meeting transcript is the most
 sensitive thing this tool touches, so where it gets sent has to be the user's explicit,
@@ -9,6 +9,9 @@ visible choice. There are exactly three:
           user pastes it into whichever AI assistant they already use, pastes the answer
           back. Zero config, zero keys, zero cost, and the transcript never leaves the
           machine except by the user's own copy-paste.
+          If assistants.json names a `cli` for that assistant, the two paste steps are
+          done for the user instead: prompt on stdin, minutes on stdout. Same route, same
+          prompt, no keys; see assistant() for why that opt-in lives in a user file.
   api     any OpenAI-compatible /chat/completions endpoint. That one shape covers
           OpenAI, Azure, DeepSeek, Qwen, Kimi, GLM, and every gateway in front of them.
   ollama  also OpenAI-compatible, at http://127.0.0.1:11434/v1. So it is not a third
@@ -108,17 +111,26 @@ def local_pick() -> dict:
     return {"ram_gb": g, "model": "", "why": ""}
 
 
-def assistant_name() -> str:
-    """The name of a local AI assistant app, if this machine has one worth naming.
+def assistant() -> dict:
+    """The local AI assistant app this machine has, if any.
 
     Nothing is hard-coded on purpose. The copy-paste path works with any assistant -
     a desktop app, a browser tab, a phone - so shipped code has no business preferring
     one. If you want the engine card to name yours, drop a file in the user directory:
 
-        assistants.json   [{"name": "Foo", "path": "C:/.../Foo.exe"}]
+        assistants.json
+        [{"name": "Foo",
+          "path": "C:/.../Foo.exe",
+          "cli":  ["C:/.../Foo.exe", "--cli"]}]
 
     First entry whose path exists wins; %VAR% in the path is expanded. No file means the
     card says the engine needs no install, which is the honest answer.
+
+    `cli` is optional and is what turns copy-paste into no-paste: a command that reads a
+    prompt on stdin and writes the answer to stdout. Most assistants that ship a terminal
+    binary have one. It stays a list in a user file rather than code because the flag is
+    different for every one of them, and because a tool that silently launches whatever
+    it found on the disk would deserve the suspicion.
     """
     try:
         import config                                          # noqa: PLC0415
@@ -126,10 +138,59 @@ def assistant_name() -> str:
         for e in json.loads(f.read_text(encoding="utf-8")):
             path = os.path.expandvars(str(e.get("path") or ""))
             if path and Path(path).exists():
-                return str(e.get("name") or "").strip()
+                argv = [os.path.expandvars(str(a)) for a in (e.get("cli") or []) if str(a)]
+                if argv and not Path(argv[0]).exists():
+                    argv = []
+                return {"name": str(e.get("name") or "").strip(), "path": path, "cli": argv}
     except Exception:                                          # noqa: BLE001
         pass
-    return ""
+    return {"name": "", "path": "", "cli": []}
+
+
+def assistant_name() -> str:
+    return assistant()["name"]
+
+
+def assistant_cli() -> list[str]:
+    return assistant()["cli"]
+
+
+def can_auto(cfg: dict) -> bool:
+    """Whether this configuration can write the minutes without a person in the middle.
+
+    On the assistant engine the answer is the `cli` field. There is no separate switch to
+    turn on, because writing that command into assistants.json by hand is already a clearer
+    consent than a checkbox: it names the program and the flag.
+    """
+    if (cfg.get("engine") or "assistant") != "assistant":
+        return True
+    return bool(assistant_cli())
+
+
+def chat_cli(prompt: str, timeout: float = 1800.0, cwd: str | None = None) -> str:
+    """One round trip through a local assistant's CLI. The prompt goes in on stdin.
+
+    Not on the command line: this prompt is a whole transcript, well past what a Windows
+    command line takes, and arguments are visible to anything that can list processes.
+    """
+    argv = assistant_cli()
+    if not argv:
+        raise RuntimeError("assistants.json 里没有 cli 字段"
+                           "，或那个程序不在")
+    try:
+        p = subprocess.run(argv, input=prompt, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout,
+                           cwd=cwd)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"{argv[0]} 超时（{timeout:.0f}s）") from exc
+    except OSError as exc:
+        raise RuntimeError(f"启不动 {argv[0]}：{exc}") from exc
+    out = (p.stdout or "").strip()
+    if p.returncode != 0 or not out:
+        tail = ((p.stderr or "") + "\n" + (p.stdout or "")).strip()[-500:]
+        raise RuntimeError(f"{Path(argv[0]).name} 退出码 {p.returncode}"
+                           f"，没拿到正文\n{tail}")
+    return out
 
 
 def ollama_models() -> list[str]:
@@ -156,7 +217,10 @@ def ollama_exe() -> str:
 def detect() -> dict:
     """Everything the three engine cards need to draw themselves, in one call."""
     ol_up = _port_open(OLLAMA_HOST, OLLAMA_PORT)
-    return {"assistant": assistant_name(), "ollama_installed": bool(ollama_exe()),
+    a = assistant()
+    return {"assistant": a["name"], "assistant_cli": bool(a["cli"]),
+            "assistant_exe": (Path(a["cli"][0]).name if a["cli"] else ""),
+            "ollama_installed": bool(ollama_exe()),
             "ollama_running": ol_up, "ollama_models": ollama_models() if ol_up else [],
             "local": local_pick(), "presets": PRESETS}
 
@@ -286,6 +350,21 @@ def chat(cfg: dict, system: str, user: str, timeout: float = 600.0) -> str:
                            f"{json.dumps(d, ensure_ascii=False)[:300]}") from exc
 
 
+def ping_cli(timeout: float = 180.0) -> dict:
+    """The assistant card's test button: a real (tiny) one-shot, so a wrong command,
+    a missing login or an assistant that answers on stderr all show up here."""
+    argv = assistant_cli()
+    t0 = time.time()
+    try:
+        txt = chat_cli("Reply with the single word: ok", timeout=timeout)
+        return {"ok": True, "local": True, "took": round(time.time() - t0, 1),
+                "reply": " ".join(txt.split())[:60],
+                "detail": "\u901a\u4e86\uff0c%.1fs\uff08%s\uff09"
+                          % (time.time() - t0, Path(argv[0]).name if argv else "?")}
+    except Exception as exc:                                   # noqa: BLE001
+        return {"ok": False, "detail": str(exc)[:400]}
+
+
 def ping(cfg: dict, timeout: float = 25.0) -> dict:
     """The card's "test connection" button. A real (tiny) completion, not just a socket:
     a wrong model name or a rejected key only shows up when you actually ask for one."""
@@ -368,7 +447,11 @@ def draft(ses: Path, cfg: dict, which: str = "minutes.md",
         return {"ok": False, "error": pr["error"]}
     t0 = time.time()
     try:
-        raw = chat(cfg, pr["system"], pr["user"], timeout=timeout)
+        if (cfg.get("engine") or "assistant") == "assistant":
+            # the same flattened prompt a person would have pasted, pasted by us
+            raw = chat_cli(pr["one"], timeout=max(timeout, 1800.0), cwd=str(ses))
+        else:
+            raw = chat(cfg, pr["system"], pr["user"], timeout=timeout)
     except Exception as exc:                                   # noqa: BLE001
         return {"ok": False, "error": str(exc)[:800]}
     out = apply_draft(ses, raw, which)
@@ -415,7 +498,10 @@ def main() -> int:
         return 0
     if args.draft:
         eff = effective(cfg)
-        print("--- step 1/2: llm.py")
+        # the chain prints its own phase markers; inside it, ours would double up and lie
+        # about how many steps there are
+        if not args.no_report:
+            print("--- step 1/2: llm.py")
         print("$ \u5f15\u64ce %s \u00b7 \u6a21\u578b %s \u00b7 %s"
               % (cfg.get("engine") or "assistant", eff.get("api_model") or "?",
                  eff.get("api_base") or "?"))

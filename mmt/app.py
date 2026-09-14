@@ -40,7 +40,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Bump this whenever app.py changes shape, and the page will say so out loud.
-BUILD = "2026-09-14e"
+BUILD = "2026-09-14f"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
@@ -313,13 +313,14 @@ def _draft_step(cfg: dict, d: Path) -> list:
     """
     The chain step that writes the minutes with a model, or nothing at all.
 
-    Nothing at all in two cases. On the `assistant` engine there is no model to call: the
-    person holds the prompt and pastes the answer back, by design. And once minutes.md says
+    Nothing at all in two cases. On the `assistant` engine with no `cli` in assistants.json
+    there is no model to call: the person holds the prompt and pastes the answer back, by
+    design, and that is still the shipped default. And once minutes.md says
     something a person wrote or approved, a rebuild must not quietly replace it -- pressing
     "generate documents" again is a request to re-render, not to re-write. So the model is
     only let near a file that is still the untouched scaffold, or missing.
     """
-    if (cfg.get("engine") or "assistant") == "assistant":
+    if not llm.can_auto(cfg):
         return []
     md = d / "minutes.md"
     if md.exists():
@@ -568,7 +569,9 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/minutes":
             self._json(self._minutes_write(cfg, b))
         elif path == "/api/engine/test":
-            self._json(llm.ping({**cfg, **b}))
+            eng = str(b.get("engine") or cfg.get("engine") or "assistant")
+            self._json(llm.ping_cli() if eng == "assistant"
+                       else llm.ping({**cfg, **b}))
         elif path == "/api/minutes/draft":
             self._json(self._draft(cfg, b))
         elif path == "/api/minutes/paste":
@@ -764,6 +767,7 @@ class H(BaseHTTPRequestHandler):
         d["ollama_base"] = llm.OLLAMA_BASE
         d["api_ack"] = bool(cfg.get("api_ack"))
         d["api_local"] = llm.is_local(str(cfg.get("api_base") or ""))
+        d["can_auto"] = llm.can_auto(cfg)
         return d
 
     def _prompt(self, cfg: dict, name: str, which: str) -> dict:
@@ -779,10 +783,12 @@ class H(BaseHTTPRequestHandler):
     def _draft(self, cfg: dict, b: dict) -> dict:
         """A cloud model answers in 20 s, a 7B on a CPU can take 8 minutes. So this is a
         job with a log, like transcription, not a request the page waits on."""
-        if (cfg.get("engine") or "assistant") == "assistant":
+        if not llm.can_auto(cfg):
             return {"error": "\u5f53\u524d\u7eaa\u8981\u5f15\u64ce\u662f\u300c\u4ea4\u7ed9 AI \u52a9\u624b\u300d\uff0c"
-                             "\u5b83\u4e0d\u8054\u7f51\u3002\u7528\u300c\u590d\u5236\u63d0\u793a\u8bcd\u300d"
-                             "\u90a3\u4e2a\u6309\u94ae\uff0c\u6216\u8005\u53bb\u8bbe\u7f6e\u91cc\u6362\u6210 API / Ollama"}
+                             "\u800c assistants.json \u91cc\u6ca1\u7ed9 cli \u547d\u4ee4\uff0c"
+                             "\u6240\u4ee5\u5b83\u53ea\u80fd\u9760\u590d\u5236\u7c98\u8d34\u3002"
+                             "\u7528\u300c\u590d\u5236\u63d0\u793a\u8bcd\u300d\u90a3\u4e2a\u6309\u94ae\uff0c"
+                             "\u6216\u8005\u53bb\u8bbe\u7f6e\u91cc\u6362\u6210 API / Ollama"}
         if ((cfg.get("engine") or "") == "api"
                 and not llm.is_local(str(cfg.get("api_base") or ""))
                 and not cfg.get("api_ack")):
