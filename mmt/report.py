@@ -293,6 +293,11 @@ code{background:var(--pane-3);padding:1px 5px;border-radius:3px;font:12px var(--
 .frames figure{margin:0}
 .frames img{width:100%;border:1px solid var(--line);border-radius:var(--r)}
 .frames figcaption{font-size:12px;color:var(--faint);margin-top:6px}
+.frames figure{cursor:pointer}
+.frames figure:hover img{border-color:var(--acc)}
+#vid{width:100%;max-height:60vh;background:#000;border:1px solid var(--line);
+ border-radius:var(--r);margin-bottom:8px}
+.hint{font-size:12px;color:var(--faint);margin:0 0 12px}
 @media (max-width:820px){.wrap{padding:12px 10px 96px}.sheet{padding:22px 18px}
  .rail nav{display:none}.turn{grid-template-columns:1fr;gap:6px}
  .turn .bd{padding-left:12px}
@@ -350,8 +355,13 @@ code{background:var(--pane-3);padding:1px 5px;border-radius:3px;font:12px var(--
 """
 
 JS = r"""
-function seek(s){var a=document.getElementById('au');if(!a)return;
- a.currentTime=Math.max(0,s-1.0);a.play();}
+function seek(s){var a=document.getElementById('au');
+ var v=document.getElementById('vid');
+ /* the mp4 clock starts at 0 when the capture started, which can be minutes into the
+    meeting; VOFF carries that gap so a picture, the video and the audio line up. */
+ if(v){var o=(window.VOFF||0);var w=Math.min(Math.max(0,s-o),Math.max(0,(v.duration||1e9)-0.1));
+  if(!isNaN(w))v.currentTime=w;}
+ if(!a)return;a.currentTime=Math.max(0,s-1.0);a.play();}
 function track(v){var a=document.getElementById('au');var t=a.currentTime;
  a.src=v;a.currentTime=t;}
 /* NOT named lang(): inside an inline onclick the scope chain includes the button, and
@@ -592,8 +602,9 @@ def main() -> int:
     rep = json.loads((ses / "transcribe_report.json").read_text(encoding="utf-8")) \
         if (ses / "transcribe_report.json").exists() else {}
     fj = ses / "frames" / "frames.json"      # frames.py writes it beside the PNGs
-    frames = (json.loads(fj.read_text(encoding="utf-8")).get("frames") or []) \
-        if fj.exists() else []
+    fmeta = json.loads(fj.read_text(encoding="utf-8")) if fj.exists() else {}
+    frames = fmeta.get("frames") or []
+    voff = float(fmeta.get("offset") or 0.0)   # meeting seconds at which the capture began
     spkinfo = json.loads((ses / "speakers.json").read_text(encoding="utf-8")) \
         if (ses / "speakers.json").exists() else {}
 
@@ -776,12 +787,21 @@ def main() -> int:
                     f'<table class="d"><tr><th>时间</th><th>轨</th><th>原文</th><th>为什么</th></tr>'
                     f"{rows}</table>"))
     if frames:
+        # Clicking a picture jumps the video AND the audio to that moment, which is the whole
+        # reason the frames carry a meeting-clock timestamp.
         figs = "".join(
-            f'<figure><img src="frames/{e(f["file"])}" loading="lazy">'
+            f'<figure onclick="seek({float(f.get("t") or 0):.2f})" '
+            f'title="跳到 {hhmmss(f.get("t") or 0)}">'
+            f'<img src="frames/{e(f["file"])}" loading="lazy">'
             f'<figcaption>{hhmmss(f.get("t") or 0)} {e(f.get("caption_zh") or "")}</figcaption>'
             "</figure>" for f in frames)
+        vid = (f'<script>window.VOFF={voff:.2f};</script>'
+               f'<video id="vid" src="screen.mp4" controls preload="metadata"></video>'
+               '<div class="hint"><span data-pl="zh">点任意一张图，录屏和录音都会跳到那一刻。'
+               '</span><span data-pl="en">Click any picture and both the video and the audio '
+               'jump to that moment.</span></div>') if (ses / "screen.mp4").exists() else ""
         ap_.append(("演示画面 · Screen key frames", len(frames),
-                    f'<div class="frames">{figs}</div>'))
+                    f'{vid}<div class="frames">{figs}</div>'))
 
     prov = ("<table class=\"d\">"
             f'<tr><th>录音时长</th><td>{(meta.get("duration_s") or 0)/60:.1f} min</td></tr>'
