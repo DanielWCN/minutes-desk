@@ -39,7 +39,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Bump this whenever app.py changes shape, and the page will say so out loud.
-BUILD = "2026-09-13i"
+BUILD = "2026-09-14a"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
@@ -283,12 +283,77 @@ def _asr_state(real: Path) -> dict:
     return out
 
 
+def _openable(cfg: dict, p: Path) -> bool:
+    """True only for a folder that belongs to this tool: the staging root, the archive root,
+    or something inside them. Used to keep os.startfile away from arbitrary paths."""
+    if not p.is_dir():
+        return False
+    roots = [config.staging(cfg)]
+    for key in ("staging_dir", "archive_dir"):
+        v = str(cfg.get(key) or "").strip()
+        if v:
+            roots.append(Path(v))
+    try:
+        p = p.resolve()
+    except Exception:                                          # noqa: BLE001
+        return False
+    for r in roots:
+        try:
+            r = r.resolve()
+        except Exception:                                      # noqa: BLE001
+            continue
+        if p == r or r in p.parents:
+            return True
+    return False
+
+
 # ------------------------------------------------------------------------------------- api
 class H(BaseHTTPRequestHandler):
     server_version = "MeetingTool"
 
     def log_message(self, *a) -> None:                         # noqa: D102
         pass
+
+    # -- who is allowed to talk to this server
+    def _same_origin(self) -> bool:
+        """Binding to 127.0.0.1 keeps other machines out; it does NOT keep other WEB PAGES
+        out. Any site open in the browser can post to a localhost port, and the reply being
+        unreadable to it does not undo the side effect. So every /api call must look like it
+        came from our own page:
+
+          Sec-Fetch-Site   sent by the browser itself and unforgeable by script; cross-site
+                           and same-site (a different port) are both refused.
+          Origin           if present it must be this exact server.
+          Host             blocks DNS rebinding, where a name that resolves to 127.0.0.1
+                           lends an attacker page our origin.
+          Content-Type     a cross-origin POST cannot set application/json without a
+                           preflight, and no CORS headers are ever sent, so the preflight
+                           fails. This is the belt to the Sec-Fetch-Site braces, for any
+                           client that does not send fetch metadata.
+        """
+        port = self.server.server_address[1]
+        ok_hosts = {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host and host not in ok_hosts:
+            return False
+        site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if site and site not in ("same-origin", "none"):
+            return False
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        if origin and origin not in {f"http://{h}" for h in ok_hosts}:
+            return False
+        if self.command == "POST":
+            ct = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if ct != "application/json":
+                return False
+        return True
+
+    def _guarded(self, path: str) -> bool:
+        if path in ("/", "/index.html", "/i18n.js") or self._same_origin():
+            return True
+        self._json({"error": "这个请求不像是从本机的工具页面发出的，已拒绝。"
+                             " / refused: not a same-origin request"}, 403)
+        return False
 
     # -- helpers
     def _send(self, code: int, body: bytes, ctype: str) -> None:
@@ -320,6 +385,8 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = parse_qs(u.query)
         path = unquote(u.path)
+        if not self._guarded(path):
+            return
 
         if path in ("/", "/index.html"):
             self._send(200, UI.read_bytes(), "text/html; charset=utf-8")
@@ -383,11 +450,55 @@ class H(BaseHTTPRequestHandler):
             ctype = "text/plain; charset=utf-8"
         if f.suffix == ".html":
             ctype = "text/html; charset=utf-8"
-        self._send(200, f.read_bytes(), ctype)
+        self._send_range(f, ctype)
+
+    def _send_range(self, f: Path, ctype: str) -> None:
+        """Stream, and honour Range. An hour of screen.mp4 is ~340 MB: reading that into a
+        bytes object to answer one request is bad enough, but without Accept-Ranges the
+        player also cannot seek, which is exactly what clicking a key frame asks it to do."""
+        size = f.stat().st_size
+        start, end, partial = 0, size - 1, False
+        m = re.match(r"bytes=(\d*)-(\d*)$", (self.headers.get("Range") or "").strip())
+        if m and size:
+            lo, hi = m.group(1), m.group(2)
+            if lo:
+                start, end = int(lo), (int(hi) if hi else size - 1)
+            elif hi:
+                start = max(0, size - int(hi))           # "the last N bytes"
+            end = min(end, size - 1)
+            if start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            partial = True
+        n = end - start + 1
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(n))
+        self.send_header("Accept-Ranges", "bytes")
+        if partial:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            with f.open("rb") as fh:
+                fh.seek(start)
+                left = n
+                while left > 0:
+                    chunk = fh.read(min(262144, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionAbortedError):
+            pass
 
     # -- POST
     def do_POST(self) -> None:                                 # noqa: N802
         path = unquote(urlparse(self.path).path)
+        if not self._guarded(path):
+            return
         b = self._body()
         cfg = config.load()
 
@@ -445,13 +556,17 @@ class H(BaseHTTPRequestHandler):
             self._json(archive.move(d, cfg, keep_audio=bool(b.get("keep_audio", True))))
 
         elif path == "/api/open":
-            target = b.get("path") or ""
+            target = str(b.get("path") or "")
             p = Path(target)
-            if p.exists():
+            if not p.exists():
+                self._json({"error": f"不存在：{target}"}, 404)
+            elif not _openable(cfg, p):
+                # startfile launches whatever Windows associates with the path, an .exe
+                # included, so it only ever gets a folder this tool owns.
+                self._json({"error": f"只能打开工具自己的文件夹，拒绝：{target}"}, 403)
+            else:
                 os.startfile(str(p))                           # noqa: S606
                 self._json({"ok": True})
-            else:
-                self._json({"error": f"不存在：{target}"}, 404)
 
         else:
             self._json({"error": "not found"}, 404)
@@ -911,7 +1026,7 @@ class H(BaseHTTPRequestHandler):
                                           json.dumps(steps, ensure_ascii=False)])
 
     def _frames(self, cfg: dict, b: dict) -> dict:
-        """screen.mp4 is unreadable as a video; frames.py turns it into pictures."""
+        """screen.mp4 plays in any browser; frames.py also pulls out still pictures."""
         name = str(b.get("session") or "")
         d = archive.resolve(config.staging(cfg) / name)
         if not (d / "screen.mp4").exists():

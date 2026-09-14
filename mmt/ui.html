@@ -1143,13 +1143,15 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
             <div class="row">
               <span class="big" id="l_time">00:00:00</span>
               <span class="tag red">录制中</span>
-              <span class="tag" id="l_priv" hidden>私密段</span>
+              <span class="tag" id="l_priv" hidden
+                title="正在私密段：录屏已暂停，两条轨的话都不进逐字稿">私密段</span>
               <span class="tag" id="l_bm" hidden></span>
               <span class="f1"></span>
               <button class="btn" id="l_vgo" onclick="recCmd('video')"
                 title="现在开始录屏：有人开始共享屏幕时点这里">开始录屏</button>
               <button class="btn" onclick="recCmd('mark')">插入书签</button>
-              <button class="btn" onclick="recCmd('private')">私密段</button>
+              <button class="btn" onclick="recCmd('private')"
+                title="进入私密段：录屏暂停，这段里你和对方的话都不进逐字稿，原始录音还在。再点一下结束">私密段</button>
               <button class="btn dgr lg" onclick="recCmd('stop')">停止录制</button>
             </div>
             <div class="kvs" id="l_meta" style="margin-top:12px"></div>
@@ -1306,7 +1308,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
       <div class="divider"></div>
       <div class="row">
         <label class="chk"><input type="checkbox" id="c_video"><span>默认录制屏幕</span>
-          <em>实测 153 MB/小时，录制整个桌面，包含他人共享的画面</em></label>
+          <em>实测 340 MB/小时，录制整个桌面，包含他人共享的画面</em></label>
       </div>
       <div class="g3" style="margin-top:14px">
         <div class="fitem"><label for="c_vfps">帧率 fps</label><input type="text" id="c_vfps"></div>
@@ -1362,7 +1364,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Bumped together with BUILD in app.py. The same string on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_BUILD = '2026-09-13i';
+const UI_BUILD = '2026-09-14a';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];

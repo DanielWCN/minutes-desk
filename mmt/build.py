@@ -193,6 +193,83 @@ def apply_speakers(segs: list[dict], ses: Path, fallback: str = "Others") -> dic
     return stats
 
 
+def split_on_pauses(segs: list[dict], min_gap: float) -> tuple[list[dict], int]:
+    """Break a segment where the speaker actually stopped talking.
+
+    Whisper's VAD strips silence before the model sees the audio, so one "segment" can run
+    for a minute across five separate utterances - measured here: a single 2.0 -> 53.0 line
+    holding five turns with 4.4s to 6.0s of silence between them. Word timestamps survive
+    that, so the pauses are recoverable exactly.
+
+    Not cosmetic. Three things key off where a line ends:
+      * the timestamp you click to jump the audio or the screen recording
+      * one row of the confirm desk, which a person reads and approves
+      * a private range, which deletes any line it OVERLAPS - so a minute-long line touching
+        a 10-second private range used to take the whole minute with it
+
+    No text changes: the words and their order are exactly as recognised, and each piece
+    keeps its own first and last word timestamp.
+
+    One wrinkle, measured rather than guessed. The word sitting just before a pause often has
+    the silence baked into its own duration: at a real 5.5s boundary the character before it
+    read 6.43 -> 7.53, a 1.10s single character where every other one in the same segment ran
+    0.16 to 0.40s. Split naively and that character lands at the end of the previous line
+    instead of the start of the next, which is where it was actually spoken. So a word whose
+    duration per character is wildly above this segment's own median is handed to the next
+    group.
+    """
+    out: list[dict] = []
+    splits = 0
+    for s in segs:
+        words = s.get("words") or []
+        if len(words) < 2:
+            out.append(s)
+            continue
+        per_char = sorted((float(w.get("e") or 0.0) - float(w.get("s") or 0.0))
+                          / max(1, len(str(w.get("w") or "").strip()))
+                          for w in words)
+        med = per_char[len(per_char) // 2] or 0.0
+        groups: list[list[dict]] = [[words[0]]]
+        for i in range(1, len(words)):
+            prev, w = words[i - 1], words[i]
+            if float(w.get("s") or 0.0) - float(prev.get("e") or 0.0) < min_gap:
+                groups[-1].append(w)
+                continue
+            stretched = med > 0 and len(groups[-1]) > 1 and (
+                (float(prev.get("e") or 0.0) - float(prev.get("s") or 0.0))
+                / max(1, len(str(prev.get("w") or "").strip())) > 2.5 * med)
+            if stretched:
+                # The silence lives inside prev, not after it, so prev starts the next line.
+                # Its own stamps have to move with it or the line would claim to begin before
+                # the pause, and the merge step downstream would glue the two back together.
+                groups[-1].pop()
+                w_s = float(w.get("s") or 0.0)
+                nchar = max(1, len(str(prev.get("w") or "").strip()))
+                moved = {**prev, "s": round(max(0.0, w_s - med * nchar), 3), "e": round(w_s, 3),
+                         "s_raw": prev.get("s"), "e_raw": prev.get("e")}
+                groups.append([moved, w])
+            else:
+                groups.append([w])
+        if len(groups) < 2:
+            out.append(s)
+            continue
+        pieces = []
+        for g in groups:
+            txt = "".join(str(w.get("w") or "") for w in g).strip()
+            if not txt:
+                continue
+            pieces.append({**s, "start": round(float(g[0].get("s") or 0.0), 3),
+                           "end": round(float(g[-1].get("e") or 0.0), 3),
+                           "text": txt, "words": g,
+                           "split_from": [s.get("start"), s.get("end")]})
+        if len(pieces) < 2:
+            out.append(s)
+            continue
+        out.extend(pieces)
+        splits += len(pieces) - 1
+    return out, splits
+
+
 def private_ranges(marks: list[dict], duration: float) -> list[tuple[float, float]]:
     """marks are (kind, t) pairs written by record.py. An unclosed range runs to the end."""
     out, open_at = [], None
@@ -228,8 +305,13 @@ def main() -> int:
                          "guess: the two tracks are captured separately, so mic=you and "
                          "loopback=them with no diarisation involved. Prefer this over the "
                          "voiceprint path whenever there are only two people.")
+    ap.add_argument("--split-gap", type=float, default=1.2,
+                    help="split a segment wherever the speaker paused this long (seconds); "
+                         "0 keeps Whisper's own segment boundaries")
     args = ap.parse_args()
     ses = Path(args.session)
+    if args.split_gap <= 0:
+        args.split_gap = 1e9
 
     meta = {}
     if (ses / "session.json").exists():
@@ -244,20 +326,29 @@ def main() -> int:
            load_track(ses / "others.segments.json", args.others)
     segs = [s for s in segs if s.get("text")]
     segs.sort(key=lambda s: s["start"])
+    segs, n_split = split_on_pauses(segs, args.split_gap)
+    segs.sort(key=lambda s: s["start"])
 
     spk_stats = apply_speakers(segs, ses, fallback=args.others)
 
-    # --- privacy: anything you said inside a PRIVATE range never reaches the text ---
+    # --- privacy: NOTHING said inside a PRIVATE range reaches the text ---
+    # This used to spare the loopback track, on the reasoning that the far end is still the
+    # meeting. That was wrong twice over. The key is documented as "everything inside a
+    # private range is cut", and it is pressed precisely when something must not be written
+    # down - often something the OTHER person is saying. Cutting half of it while reporting
+    # "removed on purpose" is worse than not offering the key at all.
     pranges = private_ranges(meta.get("marks") or [], float(meta.get("duration_s") or 0.0))
     private_cut_s = 0.0
     private_cut_n = 0
+    private_cut_by: dict[str, int] = {}
     if pranges:
         keep = []
         for s in segs:
-            # only the microphone track is yours to hide; the far end is still the meeting
-            if s.get("speaker") == args.you and in_private(s, pranges):
+            if in_private(s, pranges):
                 private_cut_s += float(s.get("end", 0)) - float(s.get("start", 0))
                 private_cut_n += 1
+                who = str(s.get("speaker") or args.others)
+                private_cut_by[who] = private_cut_by.get(who, 0) + 1
                 continue
             keep.append(s)
         segs = keep
@@ -354,8 +445,10 @@ def main() -> int:
         md.append(f"- **{len(dropped)} segment(s) dropped as hallucinations** "
                   "(non-speech audio that Whisper turned into text); listed at the bottom")
     if pranges:
-        md.append(f"- **PRIVATE: {len(pranges)} range(s), {private_cut_s:.0f}s / "
-                  f"{private_cut_n} line(s) of your own speech removed on purpose**")
+        who = ("，".join(f"{k} {v} 行" for k, v in sorted(private_cut_by.items()))
+               if private_cut_by else "没有语音落在里面")
+        md.append(f"- **PRIVATE: {len(pranges)} 段隐私区间，{private_cut_s:.0f}s / "
+                  f"{private_cut_n} 行已按你的意思删除，两条轨都删（{who}）**")
     if bookmarks:
         md.append("- bookmarks you dropped while recording: " +
                   ", ".join(hhmmss(t) for t in bookmarks))
@@ -420,13 +513,14 @@ def main() -> int:
          "private_ranges": [[round(a, 2), round(b, 2)] for a, b in pranges],
          "private_cut_s": round(private_cut_s, 1),
          "private_cut_lines": private_cut_n,
+         "private_cut_by_speaker": private_cut_by,
          "bookmarks": bookmarks,
          "suspend_events": meta.get("suspend_events") or [],
          "recovered": bool(meta.get("recovered")),
          "sensitive": bool(meta.get("sensitive")),
          "lines": lines}, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    print(f"lines={len(lines)}  speech={total/60:.1f}min  low_conf={lc}  "
+    print(f"lines={len(lines)}  split={n_split}  speech={total/60:.1f}min  low_conf={lc}  "
           f"glossary_fixes={sum(fixed_terms.values())}  "
           f"phonetic_guesses={sum(guess_terms.values())}  "
           f"dropped={len(dropped)}" +

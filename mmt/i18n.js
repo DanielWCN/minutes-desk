@@ -167,8 +167,8 @@
       'Nothing captured yet · click “Start screen capture” at the top right when you need it; capture starts from that moment',
     '同时录制屏幕': 'Capture the screen as well',
     '默认录制屏幕': 'Capture the screen by default',
-    '实测 153 MB/小时，录制整个桌面，包含他人共享的画面':
-      'Measured at 153 MB/hour; captures the whole desktop, including what others share',
+    '实测 340 MB/小时，录制整个桌面，包含他人共享的画面':
+      'Measured at 340 MB/hour; captures the whole desktop, including what others share',
     '插入书签': 'Bookmark',
     '私密段': 'Private stretch',
     '录屏已开': 'Screen capture on',

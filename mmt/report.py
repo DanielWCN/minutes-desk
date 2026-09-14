@@ -657,11 +657,21 @@ def main() -> int:
                     f"<div><b>录音有缺口</b>：机器被挂起 {len(susp)} 次（{e(det)}），"
                     "这几段音频根本没录到，对应时间的内容可能整段缺失。</div>"))
     if pranges:
+        # A private range removes BOTH tracks, and record.py also stops encoding the
+        # screen while it is on. Say so plainly: the old wording only mentioned "your
+        # own speech", which was wrong and gave a false sense of what stayed in.
+        by = tr.get("private_cut_by_speaker") or {}
+        who = "，".join(f"{e(k)} {v} 行" for k, v in by.items() if v)
+        shot = " 录屏当时也停了。" \
+               if int((meta.get("video") or {}).get("dropped_private") or 0) > 0 else ""
         ban.append(("info", "&#128274;",
-                    f"<div><b>有 {len(pranges)} 段 PRIVATE</b>：你自己的 "
-                    f"{tr.get('private_cut_s', 0):.0f} 秒发言"
-                    f"（{tr.get('private_cut_lines', 0)} 行）已按你当时按 <code>p</code> 的意愿"
-                    "从所有文字里删掉，音频里还在。</div>"))
+                    f"<div><b>有 {len(pranges)} 段 PRIVATE</b>：这几段里 "
+                    f"{tr.get('private_cut_s', 0):.0f} 秒、"
+                    f"{tr.get('private_cut_lines', 0)} 行话"
+                    + (f"（{who}）" if who else "")
+                    + "已按你当时按 <code>p</code> 的意愿从文字里删掉，"
+                      "<b>你和对方两条轨都删</b>。" + shot
+                    + "原始录音还在磁盘上。</div>"))
     if sensitive:
         ban.append(("info", "&#128465;",
                     "<div><b>敏感会话</b>：" + ("录音已删除，时间戳不再跳音频。"

@@ -264,7 +264,10 @@ def check_paths(cfg: dict) -> dict:
         free = shutil.disk_usage(p).free / 1e9
         rows.append([label, str(p), f"剩余 {free:.1f} GB"])
     free_stage = shutil.disk_usage(Path(cfg["staging_dir"])).free / 1e9
-    per_hour = 232 + (153 if cfg.get("video") else 0)
+    # 232 = two 16 kHz 16-bit mono wavs. 340 = measured, not guessed: 7,098,437 bytes of
+    # screen.mp4 for 75.3 s of a real 1920x1200 desktop (94 kB/s). The old 153 here was a
+    # guess that made the "you can record N hours" line twice as optimistic as the truth.
+    per_hour = 232 + (340 if cfg.get("video") else 0)
     hours = free_stage * 1000 / per_hour
     detail = (f"按实测 {per_hour} MB/小时"
               + ("（含录屏）" if cfg.get("video") else "（纯音频）")

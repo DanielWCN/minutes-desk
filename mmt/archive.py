@@ -40,6 +40,7 @@ def size_mb(p: Path) -> float:
 
 
 def move(session: Path, cfg: dict | None = None, keep_audio: bool = True) -> dict:
+    """keep_audio=False archives the text only: the wavs and screen.mp4 stay off OneDrive."""
     cfg = cfg or config.load()
     if not cfg.get("archive_enabled"):
         return {"ok": False, "error": "归档没有开启（在设置里打开 OneDrive 归档）"}
@@ -58,10 +59,14 @@ def move(session: Path, cfg: dict | None = None, keep_audio: bool = True) -> dic
         dst.parent.mkdir(parents=True, exist_ok=True)
         mb = size_mb(session)
         shutil.copytree(session, dst)
-        moved = sorted(p.name for p in dst.iterdir())
         if not keep_audio:
-            for w in dst.glob("*.wav"):
+            # screen.mp4 is a recording too, and the largest file here. Leaving it behind
+            # would upload a film of the whole desktop to a synced drive after the user
+            # asked for the recording NOT to be archived.
+            for w in list(dst.glob("*.wav")) + list(dst.glob("screen.mp4")):
                 w.unlink()
+        # listed after the deletion, so archived.json names files that are actually there
+        moved = sorted(p.name for p in dst.iterdir())
         # Only delete the local copy once the destination is verifiably complete.
         if not (dst / "session.json").exists():
             return {"ok": False, "error": "复制后目标缺 session.json，本地副本已保留"}

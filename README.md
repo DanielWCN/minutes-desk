@@ -57,7 +57,7 @@ already signed in on the machine, and you confirm who said what at a review step
 ```
 sessions/2026-05-04_1430_project-review/
   mic.wav  others.wav        the two tracks
-  transcript.md              timestamped, both speakers, private ranges removed
+  transcript.md              timestamped, both speakers, private ranges cut (both tracks)
   minutes.json               the facts: attendees, decisions, action items, open questions
   minutes.md                 the body, written by a language model (see below)
   minutes.html              one page, print-clean, with a "copy the email body" button
@@ -80,7 +80,9 @@ reliably works is the desktop. Anything else open is in the file. Close it first
 Deliberately cheap: 3 fps, quality 32, scaled to 1280 px wide, no audio in the mp4. Measured on
 a 1920x1200 desktop: **343 MB per hour**. A private range (`p`) pauses the capture as well as
 cutting the transcript, and `session.json` records how many frames were dropped that way, so the
-gap is accounted for rather than silent.
+gap is accounted for rather than silent. "Cutting the transcript" means every line overlapping
+the range goes, on **both** tracks: if you needed the room to go off the record, keeping half the
+record is worse than keeping none.
 
 Nobody watches an hour of video, so afterwards press **Extract key frames**. It keeps one picture
 per visible change (`--diff 0.02`, a mean over the whole desktop) and names each one with the
@@ -137,9 +139,10 @@ where you are, where they are, and who employs you:
 - Attendee names, what people said, and audio of their voice are personal data.
 
 The tool helps where software can: the OneDrive archive is **off** until you turn it on,
-a `PRIVATE` key cuts anything you say in a side conversation out of the transcript and the
-minutes, and a purge command deletes a session's audio and text together. It cannot get
-consent for you. Say at the top of the call that you are taking notes with an assistant.
+a `PRIVATE` key cuts a side conversation out of the transcript and the minutes on **both
+tracks** (theirs as well as yours) and pauses the screen capture, and `purge.py` deletes a
+session's wavs and screen recording in one command. It cannot get consent for you. Say at
+the top of the call that you are taking notes with an assistant.
 
 ## Requirements and limits
 
@@ -154,6 +157,11 @@ consent for you. Say at the top of the call that you are taking notes with an as
 - Recording keeps the machine awake, but closing the lid can still suspend it. The tool
   detects a suspend that happened anyway and puts a loud banner on the minutes, because a
   silent hole in the audio is the worst possible failure.
+- The UI is a local web server on `127.0.0.1:8760`, which means any page in your browser
+  can try to talk to it. Every `/api/` route therefore refuses a request that did not come
+  from the tool's own page: it checks `Host`, `Origin` and `Sec-Fetch-Site`, and a POST must
+  be `application/json`. `Open folder` only opens the staging and archive directories, never
+  an arbitrary path.
 
 ## Living with it
 
@@ -165,7 +173,7 @@ consent for you. Say at the top of the call that you are taking notes with an as
 | see the merged glossary | `cd mmt && python lexicon.py` |
 | rebuild one meeting's page | `cd mmt && python report.py "<session dir>" --me "Your Name"` |
 | recover a crashed session | `cd mmt && python finalize.py --scan` |
-| delete a meeting for good | `cd mmt && python purge.py "<session dir>"` |
+| delete a meeting for good | `cd mmt && python purge.py "<session dir>"` (wavs + screen.mp4; `--frames` drops the pictures too) |
 | update | pull, then `python install.py` again. Your config and glossary live outside the program directory and survive. |
 
 ## License
@@ -236,7 +244,7 @@ python install.py          # 两条路实际上跑的都是这一句
 办法就是录桌面。屏幕上还开着什么，就都在文件里。先关掉。
 
 参数刻意压得很低：3 帧每秒、质量 32、缩到 1280 像素宽、mp4 里不含声音。在 1920x1200 的桌面
-上实测：**每小时 343 MB**。隐私段（`p`）除了从逐字稿里切掉，也会同时暂停录屏，
+上实测：**每小时 343 MB**。隐私段（`p`）除了从逐字稿里切掉（**你和对方两条轨都切**，不是只切你那一轨），也会同时暂停录屏，
 `session.json` 里记着这段丢了多少帧 —— 这个空洞是有账的，不是悄悄少了一截。
 
 没人会去看一小时的录像，所以录完点**提取关键帧**。画面每变一次留一张图（`--diff 0.02`，按
@@ -267,7 +275,7 @@ python install.py          # 两条路实际上跑的都是这一句
 内容、声音本身都属于个人信息。
 
 软件能帮的部分它做了：OneDrive 归档默认**关闭**，要你自己打开；录音中按 `p` 可以把你在
-旁边说的话整段从逐字稿和纪要里切掉；删除命令会把一场会的音频和文字一起删干净。它没法替你
+旁边说的话整段从逐字稿和纪要里切掉（你和对方两条轨都切，录屏也同步暂停）；删除命令会把一场会的录音、录屏和文字一起删干净。它没法替你
 取得同意 —— 开会时说一句「我用工具记一下纪要」。
 
 ## 环境要求
@@ -275,6 +283,11 @@ python install.py          # 两条路实际上跑的都是这一句
 Windows 10/11（环回采集和读 Outlook 都是 Windows 专有的，没有 macOS/Linux 版本）；
 Python 3.10 以上；环境加语音模型约占 2.5 GB 磁盘；**不需要显卡**，转写在 CPU 上大约
 1.5 倍速，一小时的会四十分钟左右出结果，而且它刻意给会议软件让出 CPU，你可以边开会边跑。
+
+界面是跑在 `127.0.0.1:8760` 的本地网页，意味着浏览器里任何一个页面都可以尝试跟它说话。
+所以每个 `/api/` 接口都会拒接不是从工具自己页面发来的请求：校验 `Host`、`Origin`、
+`Sec-Fetch-Site`，POST 还必须是 `application/json`。「打开文件夹」只能打开暂存和归档目录，
+不接受任意路径。
 
 ## 日常使用
 
@@ -286,7 +299,7 @@ Python 3.10 以上；环境加语音模型约占 2.5 GB 磁盘；**不需要显�
 | 看合并后的词库 | `cd mmt && python lexicon.py` |
 | 重新生成某场会的纪要页 | `cd mmt && python report.py "<会话目录>" --me "你的名字"` |
 | 崩溃后救回一场会 | `cd mmt && python finalize.py --scan` |
-| 彻底删除一场会 | `cd mmt && python purge.py "<会话目录>"` |
+| 彻底删除一场会 | `cd mmt && python purge.py "<会话目录>"`（wav + screen.mp4；加 `--frames` 连关键帧也删）|
 | 更新 | 拉一下代码，再跑一次 `python install.py`。配置和词库在程序目录之外，不会丢。 |
 
 ## 开源许可

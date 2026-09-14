@@ -9,7 +9,12 @@ record.py writes recording.lock when it starts and deletes it on a clean stop. S
         would wait for a stop signal that never comes.
 
 This rebuilds session.json from the WAV length and the lock, then runs the normal
-offline chain: transcribe (large-v3) -> build -> report.
+offline chain: transcribe (large-v3) -> build -> frames (if a screen recording is
+there) -> report.
+
+A recovered screen recording keeps started_at_s = 0. The real offset lived only in the
+recorder's memory, so a capture that began late will have its pictures stamped a bit
+early; that is stated in session.json rather than guessed at.
 
 Usage:  finalize.py <session folder>        finish one session
         finalize.py --scan                  find and finish every stuck session
@@ -54,6 +59,11 @@ def repair(ses: Path) -> dict | None:
     if not tracks:
         return None
     dur = max((t["seconds"] for t in tracks.values()), default=0.0)
+    video = {}
+    if (ses / "screen.mp4").exists():
+        video = {"file": "screen.mp4", "started_at_s": 0.0, "recovered": True,
+                 "note": "the recorder died, so the real start offset is lost; "
+                         "frame timestamps assume the capture began with the audio"}
     meta = {
         "session": ses.name,
         "title": info.get("title") or ses.name,
@@ -67,10 +77,13 @@ def repair(ses: Path) -> dict | None:
                          "Live marks (private ranges, bookmarks) were lost.",
         "marks": [], "suspend_events": [], "endpoint_switches": [], "tracks": tracks,
     }
+    if video:
+        meta["video"] = video
     (ses / "session.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     lock.unlink(missing_ok=True)
-    print(f"  repaired session.json  ({dur:.1f}s of audio recovered)")
+    print(f"  repaired session.json  ({dur:.1f}s of audio recovered"
+          + (", screen.mp4 found" if video else "") + ")")
     return meta
 
 
@@ -86,6 +99,9 @@ def finish(ses: Path, model: str) -> int:
         if rc != 0:
             print(f"  {step[0]} failed with {rc}")
             return rc
+    # the key frames have to exist before report.py, or the screen section renders empty
+    if (ses / "screen.mp4").exists():
+        subprocess.run([py, str(HERE / "frames.py"), str(ses)])
     if (ses / "minutes.json").exists():
         subprocess.run([py, str(HERE / "report.py"), str(ses)])
         # a --sensitive session only stops being a liability once the audio is gone
@@ -95,7 +111,7 @@ def finish(ses: Path, model: str) -> int:
     else:
         print("  no minutes.json yet - transcript is ready, ask your AI assistant to write the minutes")
         if meta.get("sensitive"):
-            print("  NOTE: sensitive session - the WAVs are still on disk. They are deleted "
+            print("  NOTE: sensitive session - the recording is still on disk. It is deleted "
                   "automatically once minutes.json exists, or run purge.py now.")
     return 0
 
@@ -108,7 +124,14 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.scan:
-        root = HERE.parent / "sessions"
+        # sessions do not have to live next to the code; config decides where they land
+        try:
+            import config  # noqa: PLC0415
+            root = config.staging(config.load())
+        except Exception:  # noqa: BLE001
+            root = HERE.parent / "sessions"
+        if not root.exists():
+            root = HERE.parent / "sessions"
         stuck = sorted(p for p in root.glob("*")
                        if (p / "recording.lock").exists() and not (p / "session.json").exists())
         if not stuck:
