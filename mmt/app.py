@@ -46,7 +46,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable

@@ -2,14 +2,17 @@
 
 Every release carries one number, shown next to the logo in the title bar and printed by
 the black console window on start. Third digit for a fix, second for a new feature, first
-for a change of shape. Before v1.0.0 releases were stamped with a date instead, like
+for a change of shape. Earlier releases were stamped with a date instead, like
 `2026-09-14a`; if that is what your title bar says, pull and run `python install.py`.
+Numbering starts at v2.0.0, because by the time it started there was already a second
+generation of the tool on people's machines.
 
 版本号在标题栏 logo 右边，启动时的黑窗口里也会打印。第三位是修问题，第二位是加功能，
-第一位是大改。v1.0.0 之前用的是日期戳（例如 `2026-09-14a`）；如果你的标题栏还是日期，
-拉一下代码再跑一次 `python install.py`。
+第一位是大改。之前用的是日期戳（例如 `2026-09-14a`）；如果你的标题栏还是日期，
+拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
+跑的已经是第二代了。
 
-## v1.0.0
+## v2.0.0
 
 The first release with a version number instead of a date.
 
