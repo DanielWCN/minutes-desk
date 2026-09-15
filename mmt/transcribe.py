@@ -29,6 +29,7 @@ except Exception:                                            # noqa: BLE001
     lexicon = None
 
 SR = 16000
+TRACKS = ("others.wav", "mic.wav")
 MIN_CHUNK_S = 300.0     # don't bother transcribing less than this while live
 TAIL_SEARCH_S = 25.0    # look for a silent cut point in this much of the tail
 MIN_CUT_GAP_S = 0.35    # a cut point needs at least this much quiet
@@ -59,6 +60,10 @@ def _find_cut(x: np.ndarray, min_keep: int) -> int:
     """
     Index (relative to x) of the quietest short window in the tail, so we cut
     between utterances rather than mid-word. Falls back to the very end.
+
+    `x` must be at most one chunk long. Only its last TAIL_SEARCH_S are searched, so a
+    longer `x` moves that window to the end of the whole track and the answer degenerates
+    to len(x) -- a plausible integer, silently, rather than an error.
     """
     win = int(0.10 * SR)
     if len(x) < min_keep + win * 4:
@@ -179,7 +184,14 @@ def transcribe_track(eng: Engine, wav: Path, out: Path, live: bool, session_done
             finished = True
 
         if enough or (finished and pending > int(0.5 * SR)):
-            block = _read(wav, cursor, avail)
+            # One chunk at a time, never the rest of the file. _find_cut() only searches the
+            # last TAIL_SEARCH_S of what it is handed, so a block longer than one chunk puts
+            # the search window at the end of the *track*: the cut degenerates to len(block)
+            # and the whole recording goes into a single transcribe() call. Live mode hid
+            # this because a growing file never had more than a chunk available anyway; a
+            # finished file does, and a 53 minute call kills CTranslate2 with a native stack
+            # overflow (0xC00000FD) after burning 40 seconds.
+            block = _read(wav, cursor, min(avail, cursor + int(MIN_CHUNK_S * SR)))
             # Chunk even when the file is already complete: a 30 minute track handled in one
             # go prints nothing for a quarter of an hour, and the UI cannot tell "working"
             # from "hung". Cutting at a silent point keeps quality identical.
@@ -202,7 +214,10 @@ def transcribe_track(eng: Engine, wav: Path, out: Path, live: bool, session_done
             else:
                 cursor = avail
 
-        if finished and cursor >= _frames(wav):
+        # A tail under half a second is not worth a transcribe() call, but it still has to
+        # end the loop: the branch above ignores it, so cursor can never reach the end and
+        # one-shot mode used to spin on a fraction of a second at 100% CPU forever.
+        if finished and _frames(wav) - cursor <= int(0.5 * SR):
             break
         if not live:
             continue                      # keep going through the rest of the file at once
@@ -221,12 +236,25 @@ def main() -> int:
     ap.add_argument("--model", default="large-v3-turbo")
     ap.add_argument("--threads", type=int, default=0, help="0 = auto (half the cores when live)")
     ap.add_argument("--batch", type=int, default=12)
+    ap.add_argument("--only", action="append", metavar="TRACK",
+                    help="transcribe just this track (mic / others); repeatable")
     args = ap.parse_args()
 
     ses = Path(args.session)
     if not ses.is_dir():
         print(f"no such session: {ses}")
         return 2
+
+    want = {o.strip().removesuffix(".wav") for o in args.only} if args.only else None
+    if want is not None:
+        # Check before the 30 second model load, and never silently: a typo used to skip
+        # both tracks, merge the old report and exit 0, which reads as success.
+        known = {Path(t).stem for t in TRACKS}
+        unknown = sorted(want - known)
+        if unknown:
+            print(f"--only: unknown track {', '.join(unknown)}; "
+                  f"expected {' or '.join(sorted(known))}")
+            return 2
 
     # Measured: 10 threads is FASTER than 14 on this hybrid CPU (2 P + 8 E + 2 LP-E);
     # oversubscribing the efficiency cores hurts. Live mode leaves room for the meeting app.
@@ -252,17 +280,34 @@ def main() -> int:
     session_done = (lambda: done_marker.exists()) if args.live else (lambda: True)
 
     report = []
-    for name in ("others.wav", "mic.wav"):
+    for name in TRACKS:
         wav = ses / name
         if not wav.exists():
+            continue
+        if want is not None and wav.stem not in want:
+            print(f"\n-- {name}  跳过（不在 --only 里）")
             continue
         print(f"\n-- {name}")
         report.append(transcribe_track(eng, wav, ses / f"{wav.stem}.segments.json",
                                        args.live, session_done))
 
-    (ses / "transcribe_report.json").write_text(
+    # A skipped track's numbers are still true, and build.py and report.py read this file.
+    # So --only merges into the old report instead of publishing one that claims the
+    # session had a single track.
+    rp = ses / "transcribe_report.json"
+    tracks = {t["track"]: t for t in report}
+    if want is not None and rp.exists():
+        try:
+            for t in json.loads(rp.read_text(encoding="utf-8")).get("tracks", []):
+                tracks.setdefault(t.get("track"), t)
+        except (OSError, ValueError):
+            pass
+    order = {"others": 0, "mic": 1}
+    rp.write_text(
         json.dumps({"model": args.model, "threads": threads, "batch": args.batch,
-                    "tracks": report}, ensure_ascii=False, indent=2), encoding="utf-8")
+                    "tracks": sorted(tracks.values(), key=lambda t: order.get(t["track"], 9))},
+                   ensure_ascii=False, indent=2), encoding="utf-8")
+    report = sorted(tracks.values(), key=lambda t: order.get(t["track"], 9))
     print("\n" + json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 

@@ -12,6 +12,35 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.0.1
+
+A fix release, from a bug report by a colleague who put a 53 minute meeting through it.
+
+- **Fixed: a long recording could hang and then die.** Transcription after the meeting handed
+  the whole track to the recogniser in a single call instead of in five minute pieces. A 53
+  minute call killed the recogniser outright with a native stack overflow; shorter ones
+  survived but printed nothing for the entire run, so there was no way to tell working from
+  hung. It now always works in five minute pieces, exactly as it does during the meeting.
+  The words that come out are the same; the progress line every few minutes is new.
+- **Fixed: waiting on the live transcriber no longer costs half an hour.** A live
+  transcriber that had hung still looked alive, so analysis waited out its full thirty
+  minute budget before doing the work itself. It now watches for real progress and stops
+  waiting after fifteen minutes with nothing new.
+- **Fixed: only the track that needs it is transcribed.** When one track was finished and
+  the other was not, both were done again from scratch.
+- **Fixed: a recording that ends on a fraction of a second no longer spins forever.**
+
+修问题版，来自同事的一份 bug 报告：一场 53 分钟的会。
+
+- **修复：录得久的会会卡住，然后直接挂掉。** 会后转写把整条音轨一次性丢给识别引擎，而不是按五分钟一段。
+  53 分钟那一下直接把引擎打挂了（原生栈溢出）；短一点的虽然能跑完，但一整路不吐一个字，根本
+  分不出是在干活还是死了。现在无论何时都按五分钟一段，和会议进行中一样。转出来的字一模一样，多出来的
+  只是每几分钟一行的进度。
+- **修复：等实时转写不再白白等半小时。** 卡死的实时转写看起来还是活的，分析就一直等，把三十分钟的额度
+  等完了才自己动手。现在会看有没有真进展，十五分钟没动静就不等了。
+- **修复：只转写真正需要转的那条音轨。** 以前一条已完成、一条没完成时，两条都从头重转。
+- **修复：录音长度刚好多出不到半秒时，不会再无限循环。**
+
 ## v2.0.0
 
 The first release with a version number instead of a date.

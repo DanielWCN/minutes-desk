@@ -71,6 +71,19 @@ def missing(ses: Path) -> list[dict]:
     return [s for s in (track_state(ses, t) for t in TRACKS) if not s["ok"]]
 
 
+def progress(ses: Path) -> tuple:
+    """Fingerprint of how far the live transcriber has got. Changes on every chunk."""
+    out = []
+    for t in TRACKS:
+        seg = ses / f"{Path(t).stem}.segments.json"
+        try:
+            n = int(json.loads(seg.read_text(encoding="utf-8")).get("segment_count") or 0)
+            out.append((seg.stat().st_mtime_ns, n))
+        except Exception:                                      # noqa: BLE001
+            out.append((0, 0))
+    return tuple(out)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("session")
@@ -78,6 +91,11 @@ def main() -> int:
     ap.add_argument("--wait", type=float, default=0.0,
                     help="seconds to wait for a live transcriber already running")
     ap.add_argument("--force", action="store_true", help="transcribe again from scratch")
+    # A chunk is at most MIN_CHUNK_S (300s) of audio, so even at half realtime a working
+    # transcriber writes something every ~10 minutes. 15 leaves room and still beats
+    # sitting through the whole --wait budget.
+    ap.add_argument("--stall", type=float, default=900.0,
+                    help="give up waiting after this many seconds with no new segments")
     args = ap.parse_args()
 
     ses = Path(args.session)
@@ -97,17 +115,34 @@ def main() -> int:
         if args.wait > 0:
             print(f"录音期间的实时转写还没收尾，等它完成（最多 {int(args.wait/60)} 分钟）…")
             t0 = time.time()
+            seen, moved = progress(ses), time.time()
             while time.time() - t0 < args.wait:
                 time.sleep(5.0)
                 bad = missing(ses)
                 if not bad:
                     print(f"实时转写完成，用了 {time.time()-t0:.0f}s")
                     return 0
-            print("等太久了，改成自己重新转写")
+                # A hung transcriber still looks alive to poll(), so waiting on the process
+                # alone once burned the full 30 minutes before falling back. Segments land
+                # every few minutes while it really works; no movement means no progress.
+                now = progress(ses)
+                if now != seen:
+                    seen, moved = now, time.time()
+                elif args.stall > 0 and time.time() - moved > args.stall:
+                    print(f"实时转写 {int(args.stall)}s 没有任何进展，不等了，自己重新转写")
+                    break
+            else:
+                print("等太久了，改成自己重新转写")
         for st in bad:
             print(f"  需要转写 {st['track']}: {st['reason']}")
 
     argv = [sys.executable, "-u", str(HERE / "transcribe.py"), str(ses), "--model", args.model]
+    if not args.force:
+        # missing() already worked out which tracks need doing. Without saying so, the
+        # finished track is transcribed a second time before the one that actually needs
+        # work is even reached.
+        for st in bad:
+            argv += ["--only", st["track"]]
     print("开始语音识别（1 分钟音频约 10-20 秒，请等）")
     print("$ " + " ".join(argv))
     t0 = time.time()
