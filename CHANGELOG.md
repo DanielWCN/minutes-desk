@@ -12,6 +12,27 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.3.2
+
+- **A sentence you typed yourself now reaches the other sheet too.** v2.3.1 carried a word
+  across, which works because the same term is spelled the same in both sheets. A whole
+  sentence cannot travel that way - the two sheets are in different languages - so it takes
+  the model. The save is still instant; the page then chains one model call, about fifteen
+  seconds, as a job with a log like every other model call in the tool. Fixing a single word
+  still costs nothing and starts nothing.
+- More than a dozen changes in one save is a rewrite, not a fix. It is not mirrored, and the
+  log says so, rather than quietly reflowing the other sheet off an edit that large.
+- On the copy-paste engine there is no model to call, so the banner says the other sheet did
+  not follow, and which file to fix by hand.
+
+- **自己打进去的整句话，现在也会带到另一份稿子上。** v2.3.1 带的是一个词 —— 同一个术语在两份
+  稿子里拼法一样，所以照着替换就行。整句话没法这么带，两份稿子是两种语言，得让模型来。保存本身
+  还是秒回；保存完页面自己接着花一次模型调用，大约十几秒，和工具里其他模型调用一样，是一个带日志
+  的任务。只改一个词的时候，还是不花时间、也不会启动任何东西。
+- 一次保存改了十几处以上，那是重写，不是修错。这种不自动同步，日志里会写明，而不是照着这么大的
+  改动悄悄把另一份稿子也重排一遍。
+- 复制粘贴那条引擎上没有模型可调，所以横幅会直接说另一份稿子没跟着改、要自己去改哪个文件。
+
 ## v2.3.1
 
 - **The paste box checked the wrong headings.** Same bug as v2.2.2, in the other route: a

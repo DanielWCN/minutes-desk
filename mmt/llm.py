@@ -715,7 +715,8 @@ def _rev_state(d: dict) -> dict:
     keep = ("file", "mode", "took", "mirror")
     return {"open": d.get("open") or [], "n": len(d.get("open") or []),
             "rounds": len(h),
-            "last": {k: h[-1][k] for k in keep if k in h[-1]} if h else {}}
+            "last": {k: h[-1][k] for k in keep if k in h[-1]} if h else {},
+            "last_mirror": d.get("last_mirror") or {}}
 
 
 def review_load(ses: Path) -> dict:
@@ -923,6 +924,9 @@ def _mirror_once(ses: Path, cfg: dict, name: str, marks: list,
     return {"file": name, "how": "model", "hits": len(edits)}
 
 
+MIRROR_MAX = 12          # past this the edit is a rewrite, not a fix; do not mirror it
+
+
 def mirror(ses: Path, cfg: dict, which: str, marks: list,
            timeout: float = 600.0, before: str | None = None,
            terms_only: bool = False) -> dict:
@@ -943,7 +947,7 @@ def mirror(ses: Path, cfg: dict, which: str, marks: list,
     Those two routes pass terms_only: they are the routes a person takes when there is no
     model to call, and the word-level replace is the half that needs no model.
     """
-    out: dict = {"files": [], "pairs": 0, "terms": []}
+    out: dict = {"files": [], "pairs": 0, "terms": [], "pending": []}
     rest = others(ses, which)
     pairs = (pairs_between(before, _read(ses / which)) if before is not None
              else pairs_from_bak(ses, which))
@@ -968,6 +972,13 @@ def mirror(ses: Path, cfg: dict, which: str, marks: list,
                 out["files"].append({"file": name, "hits": hits, "how": "term"})
                 continue
         if terms_only:
+            # the word-level pass is done and something is still different. Say so instead
+            # of pretending, and let the caller decide whether to spend a model call.
+            out["pending"].append(name)
+            continue
+        if len(pairs) > MIRROR_MAX:
+            out["files"].append({"file": name, "hits": 0, "how": "model",
+                                 "note": "\u6539\u52a8\u592a\u591a\uff0c\u6ca1\u81ea\u52a8\u540c\u6b65"})
             continue
         out["files"].append(_mirror_once(ses, cfg, name, marks, pairs, timeout))
     return out
@@ -1017,6 +1028,24 @@ def revise(ses: Path, cfg: dict, which: str = "minutes.md",
     return out
 
 
+def mirror_run(ses: Path, cfg: dict, which: str,
+               timeout: float = 600.0) -> dict:
+    """The second half of a hand edit: the sentences a word-level replace could not carry.
+
+    Kept apart from revise() and out of `history`, because nobody marked anything - the
+    reader simply typed the fix themselves, and the other sheet still has to follow.
+    """
+    t0 = time.time()
+    out = mirror(ses, cfg, which, [], timeout)
+    out["took"] = round(time.time() - t0, 1)
+    out["ok"] = not any(f.get("error") or f.get("problems") for f in out["files"])
+    d = review_load(ses)
+    d["last_mirror"] = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "file": which,
+                        "mirror": {k: v for k, v in out.items() if k != "ok"}}
+    review_save(ses, d)
+    return out
+
+
 # ------------------------------------------------------------------------------- cli
 def main() -> int:
     ap = argparse.ArgumentParser(description="minutes engine")
@@ -1025,6 +1054,7 @@ def main() -> int:
     ap.add_argument("--print-prompt", action="store_true")
     ap.add_argument("--draft", action="store_true")
     ap.add_argument("--revise", action="store_true")
+    ap.add_argument("--mirror", action="store_true")
     # the processing chain renders the document itself, one step later
     ap.add_argument("--no-report", action="store_true")
     ap.add_argument("--ping", action="store_true")
@@ -1056,6 +1086,21 @@ def main() -> int:
             return 1
         sys.stdout.write(pr["one"])
         return 0
+    if args.mirror:
+        if not args.no_report:
+            print("--- step 1/2: llm.py")
+        print("$ \u6b63\u5728\u628a\u8fd9\u6b21\u6539\u52a8\u540c\u6b65\u5230\u53e6\u4e00\u4efd\u7a3f\u5b50")
+        r = mirror_run(ses, cfg, args.file)
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+        if not r.get("ok"):
+            return 1
+        if args.no_report:
+            return 0
+        print("--- step 2/2: report.py")
+        argv = [sys.executable, "-u", str(HERE / "report.py"), str(ses)]
+        if cfg.get("me"):
+            argv += ["--me", str(cfg["me"])]
+        return subprocess.run(argv).returncode
     if args.draft or args.revise:
         eff = effective(cfg)
         # the chain prints its own phase markers; inside it, ours would double up and lie
@@ -1085,7 +1130,8 @@ def main() -> int:
         if cfg.get("me"):
             argv += ["--me", str(cfg["me"])]
         return subprocess.run(argv).returncode
-    ap.error("pick one of --detect / --ping / --print-prompt / --draft / --revise")
+    ap.error("pick one of --detect / --ping / --print-prompt / --draft / --revise"
+             " / --mirror")
     return 2
 
 

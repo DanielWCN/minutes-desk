@@ -156,9 +156,9 @@
     '开始一场新会议：填名称与与会人，然后录制':
       'Start a new meeting: name it, list the attendees, then record',
     '会议名称': 'Meeting name',
+    '例如 Weekly capacity planning': 'e.g. Weekly capacity planning',
     '留空则用默认名，也用作邮件主题': 'Leave blank for the default name; also used as the email subject',
     '用于纪要标题与邮件主题': 'Used as the minutes title and the email subject',
-    '例如 Nexus capacity planning': 'e.g. Nexus capacity planning',
     '开始录制': 'Start recording',
     '停止录制': 'Stop recording',
     '开始录屏': 'Start screen capture',

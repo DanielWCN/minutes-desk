@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.3.1"
+VERSION = "2.3.2"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -678,6 +678,8 @@ class H(BaseHTTPRequestHandler):
             self._json(self._paste(cfg, b))
         elif path == "/api/minutes/revise":
             self._json(self._revise(cfg, b))
+        elif path == "/api/minutes/mirror":
+            self._json(self._mirror(cfg, b))
         elif path == "/api/review":
             self._json(self._review_write(cfg, b))
 
@@ -875,7 +877,8 @@ class H(BaseHTTPRequestHandler):
         if r.returncode != 0:
             tail = (r.stderr or r.stdout or "").strip()[-400:]
             return {"error": "已写入正文，但重排纪要失败：" + tail}
-        return {"ok": True, "file": which, "mirror": mir}
+        return {"ok": True, "file": which, "mirror": mir,
+                "mirror_pending": list(mir.get("pending") or [])}
 
     # -- the minutes engine. Three cards, one HTTP shape; see mmt/llm.py for why.
     def _engine(self, cfg: dict) -> dict:
@@ -992,6 +995,22 @@ class H(BaseHTTPRequestHandler):
         if op == "clear":
             return llm.review_clear(d)
         return {"error": f"未知操作 {op}"}
+
+    def _mirror(self, cfg: dict, b: dict) -> dict:
+        """Carry a hand-typed sentence to the other sheet. Called by the page right after a
+        save, and only when the save said something was left over."""
+        gate = self._engine_gate(cfg)
+        if gate:
+            return gate
+        which = str(b.get("file") or "minutes.md")
+        if which not in llm.SHEETS:
+            return {"error": f"不允许写入 {which}"}
+        d = archive.resolve(config.staging(cfg) / str(b.get("session", "")))
+        if not d.is_dir():
+            return {"error": "找不到该会话"}
+        return start_job(f"同步另一份稿子 {d.name}",
+                         [PY, "-u", str(HERE / "llm.py"), str(d), "--mirror",
+                          "--file", which])
 
     def _revise(self, cfg: dict, b: dict) -> dict:
         gate = self._engine_gate(cfg)

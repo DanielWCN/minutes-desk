@@ -1391,7 +1391,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.3.1';
+const UI_VERSION = '2.3.2';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2351,11 +2351,11 @@ function mirrorSays(){
 }
 
 async function revLoad(name){
-  REV = {n:0, open:[], rounds:0, name:name || '', last:{}};
+  REV = {n:0, open:[], rounds:0, name:name || '', last:{}, last_mirror:{}};
   if (name){
     const r = await api('/api/review?session=' + encodeURIComponent(name));
     if (!r.error) REV = {n:r.n || 0, open:r.open || [], rounds:r.rounds || 0, name:name,
-                         last:r.last || {}};
+                         last:r.last || {}, last_mirror:r.last_mirror || {}};
   }
   revPaint();
 }
@@ -2397,7 +2397,8 @@ async function revOp(body){
   const r = await api('/api/review', {session:s.name, ...body});
   if (r.error){ alert(r.error); return null; }
   REV = {n:r.n || 0, open:r.open || [], rounds:r.rounds || 0, name:s.name,
-         last:r.last || REV.last || {}};
+         last:r.last || REV.last || {},
+         last_mirror:r.last_mirror || REV.last_mirror || {}};
   revPaint();
   return r;
 }
@@ -2419,6 +2420,31 @@ async function revCopy(){
   if (m) m.textContent = ok
     ? `已复制 ${Math.round(r.chars / 1000)}k 字，里面带着这 ${REV.n} 处标注`
     : '复制失败';
+}
+/* A word can be carried between the two sheets by hand - it is the same string in both.
+   A whole sentence cannot, so it takes the model. The save itself stays instant, and the
+   page then chains this, as a job with a log, like every other model call in the tool. */
+async function mirrorGo(file, pend){
+  const s = ses(cur);
+  if (!s || !(pend || []).length) return;
+  const names = pend.map(f => `<code>${f}</code>`).join('、');
+  if (!(E ? !!E.can_auto : engCur() !== 'assistant')){
+    ban('todo', '另一份稿子没跟着改',
+        '这次是整句改动，没法照词替换到' + names
+        + '。当前引擎只能复制粘贴，'
+        + '请在「编辑正文」里自己改那一份。');
+    return;
+  }
+  if (!await cliOk()) return;
+  jobKind = 'mirror';
+  flow = {sub:'正在启动…', t0:Date.now(), step:1, of:2};
+  pgShow('同步另一份稿子', '正在启动…');
+  revWhich = file;
+  ban('busy', '正在把这次改动带到' + names,
+      '整句改动没法照词替换，要模型把两边都看一眼再改，'
+      + '通常十几秒。只改一个词的时候不会走到这一步。'
+      + '上一版会存成同名的 <code>.bak</code>，改坏了可以拿回来。');
+  watch(await api('/api/minutes/mirror', {session:s.name, file:file}), '#jlog');
 }
 async function reviseGo(){
   const s = ses(cur), m = $('#revmsg');
@@ -2525,12 +2551,13 @@ async function edSave(){
   m.textContent = '\u6b63\u5728\u4fdd\u5b58\u2026';
   const r = await api('/api/minutes', {session:s.name, file:edFile, text:e.value});
   if (r.error){ m.textContent = ''; alert(r.error); return; }
-  const also = mirrorOf(r);
+  const also = mirrorOf(r), f = edFile;
   if (also) ban('ok', '已保存', '同一个词在' + also + '也一起改了。');
   edOrig = e.value;
   edOn = false; docSig = null; docRev++;
   drawDoc();
   refresh(0);
+  mirrorGo(f, r.mirror_pending || []);
 }
 function docReload(){ docRev++; drawDoc(); }
 
@@ -2802,10 +2829,11 @@ async function pasteGo(force){
     } else alert(r.error);
     return;
   }
-  const also = mirrorOf(r);
+  const also = mirrorOf(r), f = psFile;
   if (also) ban('ok', '已写入', '同一个词在' + also + '也一起改了。');
   edOn = false; docSig = null; docRev++;
   drawDoc(); refresh(0);
+  mirrorGo(f, r.mirror_pending || []);
 }
 
 /* A cloud model answers in half a minute; a 7B on a laptop cpu can take eight. So this
@@ -3230,7 +3258,9 @@ async function pollJob(){
     await refresh(0);
     if (kind && j.state === 'failed')
       ban('fail', (kind === 'asr' ? '语音识别失败'
-                   : kind === 'revise' ? '按标注重写失败' : '生成文档失败'),
+                   : kind === 'revise' ? '按标注重写失败'
+                   : kind === 'mirror' ? '同步另一份稿子失败'
+                   : '生成文档失败'),
           '原因见日志末尾几行（在上方进度条的「查看日志」里）。可截图发送给 AI 助手 定位。');
     else if (kind === 'asr'){
       const s = ses(cur);
@@ -3263,6 +3293,18 @@ async function pollJob(){
       ban('ok', `已按标注重写 · 用了 ${j.elapsed}s`,
           `标注已清空，纸面是新版本。${mirrorSays()}上一版存成了 <code>${f}.bak</code>，`
           + '右上角「编辑正文」里可以自己再改。');
+    } else if (kind === 'mirror'){
+      // nothing on the card changes, so the paper has to be told to reload by hand
+      const s = ses(cur);
+      docRev++; docSig = null; drawDoc();
+      if (s) await revLoad(s.name);
+      const also = mirrorOf({mirror:(REV.last_mirror || {}).mirror});
+      ban('ok', `另一份稿子已同步 · 用了 ${j.elapsed}s`,
+          also ? '这次改动带到了' + also
+                 + '。上一版存成了同名的 <code>.bak</code>，'
+                 + '右上角「编辑正文」里可以自己再改。'
+               : '模型把两边都看过了，认为另一份不用改。'
+                 + '它的结论在日志里。');
     } else if (kind === 'doc'){
       const s = ses(cur);
       ban('ok', `逐字稿已生成 \u00b7 用了 ${j.elapsed}s`,
