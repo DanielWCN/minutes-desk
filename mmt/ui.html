@@ -1391,7 +1391,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.3.0';
+const UI_VERSION = '2.3.1';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2335,6 +2335,13 @@ const revFile = () => (REV.open[0] && REV.open[0].file) || 'minutes.md';
 
 /* What the round did to the other language sheet, in one clause or none. The numbers
    come back inside review.json, so this is what actually happened, not a promise. */
+/* The other sheet, out of a write response. Same numbers, same wording as mirrorSays. */
+function mirrorOf(r){
+  const done = (((r || {}).mirror || {}).files || []).filter(f => (f.hits || 0) > 0);
+  return done.length
+    ? done.map(f => `<code>${f.file}</code>（${f.hits} 处）`).join('、') : '';
+}
+
 function mirrorSays(){
   const m = (REV.last && REV.last.mirror) || {};
   const done = (m.files || []).filter(f => (f.hits || 0) > 0);
@@ -2377,7 +2384,7 @@ function revPaint(){
       <div class="row">
         ${auto ? '<button class="btn pri" onclick="reviseGo()">按标注重写</button>' : ''}
         <button class="btn${auto ? '' : ' pri'}" onclick="revCopy()">复制修订请求</button>
-        ${auto ? '' : '<button class="btn" onclick="pasteStart()">粘回纪要</button>'}
+        ${auto ? '' : `<button class="btn" onclick="pasteStart('${revFile()}')">粘回纪要</button>`}
         <button class="btn" onclick="revClear()">清空标注</button>
         <span class="f1"></span><span class="msg" id="revmsg"></span>
       </div></div>`;
@@ -2518,6 +2525,8 @@ async function edSave(){
   m.textContent = '\u6b63\u5728\u4fdd\u5b58\u2026';
   const r = await api('/api/minutes', {session:s.name, file:edFile, text:e.value});
   if (r.error){ m.textContent = ''; alert(r.error); return; }
+  const also = mirrorOf(r);
+  if (also) ban('ok', '已保存', '同一个词在' + also + '也一起改了。');
   edOrig = e.value;
   edOn = false; docSig = null; docRev++;
   drawDoc();
@@ -2758,15 +2767,19 @@ async function promptCopy(){
     : '复制失败，请改用「编辑正文」手工处理';
 }
 
-/* Pasting back is the same box as editing, with the source it is waiting for named. */
-function pasteStart(){
+/* Pasting back is the same box as editing, with the source it is waiting for named.
+   The target sheet is carried explicitly: a revision of the Chinese page pasted back used
+   to be written into minutes.md, in Chinese. */
+let psFile = 'minutes.md';
+function pasteStart(f){
   const s = ses(cur);
   if (!s) return;
+  psFile = f || 'minutes.md';
   edOn = true;
   const st = $('#doc_st');
   st.textContent = '等待粘贴'; st.className = 'tag blue';
   $('#doc_bd').innerHTML = `<div class="edw">
-    <div class="edb"><span class="sub">把 AI 助手回的整份内容粘进来，从第一行的 --- 开始</span>
+    <div class="edb"><span class="sub">把 AI 助手回的整份内容粘进来，从第一行的 --- 开始，写入 <code>${psFile}</code></span>
       <span class="f1"></span><span class="sub" id="ps_msg"></span>
       <button class="btn" onclick="pasteEnd()">取消</button>
       <button class="btn pri" onclick="pasteGo(0)">写入并成文</button></div>
@@ -2779,7 +2792,7 @@ async function pasteGo(force){
   if (!s || !e) return;
   m.textContent = '正在写入…';
   const r = await api('/api/minutes/paste',
-    {session:s.name, file:'minutes.md', text:e.value, force:!!force});
+    {session:s.name, file:psFile, text:e.value, force:!!force});
   if (r.error){
     m.textContent = '';
     const pb = r.problems || [];
@@ -2789,6 +2802,8 @@ async function pasteGo(force){
     } else alert(r.error);
     return;
   }
+  const also = mirrorOf(r);
+  if (also) ban('ok', '已写入', '同一个词在' + also + '也一起改了。');
   edOn = false; docSig = null; docRev++;
   drawDoc(); refresh(0);
 }

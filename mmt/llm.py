@@ -612,6 +612,19 @@ def sub_term(text: str, a: str, b: str) -> tuple[str, int]:
     return "".join(out), hits
 
 
+def pairs_between(before: str, after: str) -> list[tuple[str, str]]:
+    """What changed between two versions of a sheet, block by block."""
+    a, b = before.split("\n"), after.split("\n")
+    out = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b).get_opcodes():
+        if tag == "equal":
+            continue
+        old, new = "\n".join(a[i1:i2]).strip("\n"), "\n".join(b[j1:j2]).strip("\n")
+        if old.strip():
+            out.append((old, new))
+    return out
+
+
 def pairs_from_bak(ses: Path, which: str) -> list[tuple[str, str]]:
     """What this round actually changed, read back off the file and its .bak.
 
@@ -621,15 +634,7 @@ def pairs_from_bak(ses: Path, which: str) -> list[tuple[str, str]]:
     bak = ses / (which + ".bak")
     if not bak.exists():
         return []
-    a, b = _read(bak).split("\n"), _read(ses / which).split("\n")
-    out = []
-    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b).get_opcodes():
-        if tag == "equal":
-            continue
-        old, new = "\n".join(a[i1:i2]).strip("\n"), "\n".join(b[j1:j2]).strip("\n")
-        if old.strip():
-            out.append((old, new))
-    return out
+    return pairs_between(_read(bak), _read(ses / which))
 
 
 def draft(ses: Path, cfg: dict, which: str = "minutes.md",
@@ -919,7 +924,8 @@ def _mirror_once(ses: Path, cfg: dict, name: str, marks: list,
 
 
 def mirror(ses: Path, cfg: dict, which: str, marks: list,
-           timeout: float = 600.0) -> dict:
+           timeout: float = 600.0, before: str | None = None,
+           terms_only: bool = False) -> dict:
     """Carry this round's fix over to the other language sheet.
 
     A mark is about the meeting, not about one sheet: a term that is wrong in the Chinese
@@ -931,10 +937,16 @@ def mirror(ses: Path, cfg: dict, which: str, marks: list,
 
     Nothing here can lose text: every write goes through apply_draft, which validates the
     result and keeps a .bak, and a failure is reported instead of retried.
+
+    `before` lets a caller that already has the previous text hand it over instead of it
+    being read back off the .bak - the editor and the paste box write the sheet themselves.
+    Those two routes pass terms_only: they are the routes a person takes when there is no
+    model to call, and the word-level replace is the half that needs no model.
     """
     out: dict = {"files": [], "pairs": 0, "terms": []}
     rest = others(ses, which)
-    pairs = pairs_from_bak(ses, which)
+    pairs = (pairs_between(before, _read(ses / which)) if before is not None
+             else pairs_from_bak(ses, which))
     out["pairs"] = len(pairs)
     if not rest or not pairs:
         return out
@@ -955,6 +967,8 @@ def mirror(ses: Path, cfg: dict, which: str, marks: list,
             if r.get("ok"):
                 out["files"].append({"file": name, "hits": hits, "how": "term"})
                 continue
+        if terms_only:
+            continue
         out["files"].append(_mirror_once(ses, cfg, name, marks, pairs, timeout))
     return out
 

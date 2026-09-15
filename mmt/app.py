@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -852,7 +852,21 @@ class H(BaseHTTPRequestHandler):
         text = str(b.get("text") or "")
         if not text.strip():
             return {"error": "正文为空，未写入"}
+        before = (d / which).read_text(encoding="utf-8") if (d / which).exists() else ""
+        # same promise the rewrite route makes: what was there is still there afterwards.
+        # The paste box in particular holds a model's text, not the reader's.
+        if before.strip():
+            (d / (which + ".bak")).write_text(before, encoding="utf-8", newline="\n")
         (d / which).write_text(text, encoding="utf-8", newline="\n")
+        # A word fixed here is the same word in the other language sheet. No model is
+        # called for it - the two files spell a term, a name or a system identically - so
+        # the fix is carried over before the document is re-rendered, not after.
+        mir = {}
+        if before.strip():
+            try:
+                mir = llm.mirror(d, cfg, which, [], before=before, terms_only=True)
+            except Exception as exc:                           # noqa: BLE001
+                mir = {"files": [], "error": str(exc)[:300]}
         argv = [PY, "-u", str(HERE / "report.py"), str(d)]
         if cfg.get("me"):
             argv += ["--me", cfg["me"]]
@@ -861,7 +875,7 @@ class H(BaseHTTPRequestHandler):
         if r.returncode != 0:
             tail = (r.stderr or r.stdout or "").strip()[-400:]
             return {"error": "已写入正文，但重排纪要失败：" + tail}
-        return {"ok": True, "file": which}
+        return {"ok": True, "file": which, "mirror": mir}
 
     # -- the minutes engine. Three cards, one HTTP shape; see mmt/llm.py for why.
     def _engine(self, cfg: dict) -> dict:
@@ -943,7 +957,12 @@ class H(BaseHTTPRequestHandler):
         text = llm.clean(str(b.get("text") or ""))
         if not text.strip():
             return {"error": "\u7c98\u8fdb\u6765\u7684\u5185\u5bb9\u662f\u7a7a\u7684"}
-        bad = llm.validate(text)
+        # against the headings this file already has, not against the English four: a
+        # pasted-back Chinese sheet was being refused for "缺少 ## Summary"
+        d0 = archive.resolve(config.staging(cfg) / str(b.get("session", "")))
+        cur = d0 / str(b.get("file") or "minutes.md")
+        heads = llm.heads_of(cur.read_text(encoding="utf-8")) if cur.exists() else None
+        bad = llm.validate(text, heads)
         if bad and not b.get("force"):
             return {"error": "\u8fd9\u6bb5\u5185\u5bb9\u4e0d\u50cf\u4e00\u4efd\u5b8c\u6574\u7684 minutes.md",
                     "problems": bad}

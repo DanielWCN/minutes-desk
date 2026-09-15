@@ -12,6 +12,29 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.3.1
+
+- **The paste box checked the wrong headings.** Same bug as v2.2.2, in the other route: a
+  rewritten Chinese sheet pasted back was refused for "缺少 ## Summary". It is now checked
+  against the headings that file already has, and a genuinely broken paste is refused in the
+  right language.
+- **The paste box wrote the wrong file.** It always wrote `minutes.md`, so a revision of the
+  Chinese page landed in the English one, in Chinese. It now writes the sheet the request
+  came from, and says which file that is above the box.
+- **Editing or pasting a sheet by hand also fixes the word in the other sheet.** Same
+  word-level replace as a rewrite round, no model involved, so the copy-paste route and the
+  editor behave like the button does.
+- Saving over a sheet keeps a `.bak` now, like every other write. The paste box in
+  particular holds a model's text, not yours.
+
+- **粘回纪要校验的是错的标题。** 和 v2.2.2 同一个毛病，另一条路上还留着：中文稿改好粘回来，
+  被判「缺少 ## Summary」。现在按这份文件本来的标题校验，真的粘错了也会用对的语言告诉你缺什么。
+- **粘回纪要写错了文件。** 以前一律写 `minutes.md`，所以中文稿的修订会被写进英文那份里，内容还是
+  中文。现在写你点进来的那份，框上面也写清是哪个文件。
+- **手工编辑正文、手工粘回，同一个词在另一份稿子里也会一起改。** 和按钮那条路一样的词级替换，
+  不调模型，所以复制粘贴那条路和编辑器现在跟按钮的行为一致。
+- 保存覆盖正文时会留 `.bak` 了，和其他写入一样。粘回框里装的是模型的文字，不是你的。
+
 ## v2.3.0
 
 - **A mark fixes both language sheets.** A mark is about the meeting, not about the page
