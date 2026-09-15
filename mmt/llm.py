@@ -23,6 +23,7 @@ is that setup downloads as little as possible, and this needs one POST.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -541,6 +542,96 @@ def apply_edits(text: str, edits: list[tuple[str, str]]) -> tuple[str, list[str]
     return re.sub(r"\n{3,}", "\n\n", t), []
 
 
+SHEETS = ("minutes.md", "minutes.zh.md", "minutes.en.md")
+
+
+def others(ses: Path, which: str) -> list[str]:
+    """The same minutes in the other language, when this session has one."""
+    return [n for n in SHEETS
+            if n != which and (ses / n).exists() and _read(ses / n).strip()]
+
+
+def _alnum(c: str) -> bool:
+    """ASCII letter or digit. CJK is deliberately excluded: Chinese is written without
+    spaces, so treating the neighbouring character as part of the same word would block
+    every sensible replacement."""
+    return c.isascii() and c.isalnum()
+
+
+def _wordish(c: str) -> bool:
+    return c.isalnum() or c in "&_.-/+" or ord(c) > 0x2E7F
+
+
+def term_pair(old: str, new: str) -> tuple[str, str] | None:
+    """The one word that differs between two versions of a sentence, or None when the
+    change is bigger than a word.
+
+    This is what carries a mark from one sheet to the other for free: a term, a name or a
+    system is spelt the same in both languages, so P&L -> PNL needs no second model call,
+    only a careful replace.
+    """
+    if old == new:
+        return None
+    i = 0
+    while i < len(old) and i < len(new) and old[i] == new[i]:
+        i += 1
+    j = 0
+    while (j < min(len(old), len(new)) - i
+           and old[len(old) - 1 - j] == new[len(new) - 1 - j]):
+        j += 1
+    # widen to whole words, so the pair reads P&L -> PNL and not &L -> NL
+    while i > 0 and _wordish(old[i - 1]) and i - 1 < min(len(old), len(new)) - j:
+        i -= 1
+    while (j > 0 and _wordish(old[len(old) - j])
+           and i < min(len(old), len(new)) - (j - 1)):
+        j -= 1
+    a, b = old[i:len(old) - j], new[i:len(new) - j]
+    if "\n" in a or "\n" in b or not 2 <= len(a) <= 40:
+        return None
+    if not any(c.isalpha() for c in a):
+        return None                # a bare number is never safe to swap document-wide
+    return (a, b)
+
+
+def sub_term(text: str, a: str, b: str) -> tuple[str, int]:
+    """Replace a term everywhere it stands on its own. 17 inside 2026-09-17 is not the
+    term, and neither is P&L inside P&Ls."""
+    out, i, hits = [], 0, 0
+    while True:
+        k = text.find(a, i)
+        if k < 0:
+            break
+        lo = text[k - 1] if k else " "
+        hi = text[k + len(a)] if k + len(a) < len(text) else " "
+        edge = (_alnum(a[0]) and _alnum(lo)) or (_alnum(a[-1]) and _alnum(hi))
+        out.append(text[i:k])
+        out.append(a if edge else b)
+        hits += 0 if edge else 1
+        i = k + len(a)
+    out.append(text[i:])
+    return "".join(out), hits
+
+
+def pairs_from_bak(ses: Path, which: str) -> list[tuple[str, str]]:
+    """What this round actually changed, read back off the file and its .bak.
+
+    Both routes leave the same trace, so the mirror never has to know whether a patch or a
+    full rewrite produced the new version.
+    """
+    bak = ses / (which + ".bak")
+    if not bak.exists():
+        return []
+    a, b = _read(bak).split("\n"), _read(ses / which).split("\n")
+    out = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b).get_opcodes():
+        if tag == "equal":
+            continue
+        old, new = "\n".join(a[i1:i2]).strip("\n"), "\n".join(b[j1:j2]).strip("\n")
+        if old.strip():
+            out.append((old, new))
+    return out
+
+
 def draft(ses: Path, cfg: dict, which: str = "minutes.md",
           timeout: float = 600.0) -> dict:
     pr = build_prompt(ses, which)
@@ -615,8 +706,11 @@ MAX_MARKS = 40
 
 # ------------------------------------------------------------------- marks on the paper
 def _rev_state(d: dict) -> dict:
+    h = d.get("history") or []
+    keep = ("file", "mode", "took", "mirror")
     return {"open": d.get("open") or [], "n": len(d.get("open") or []),
-            "rounds": len(d.get("history") or [])}
+            "rounds": len(h),
+            "last": {k: h[-1][k] for k in keep if k in h[-1]} if h else {}}
 
 
 def review_load(ses: Path) -> dict:
@@ -751,6 +845,120 @@ def _revise_once(ses: Path, cfg: dict, which: str, marks: list,
     return out
 
 
+REVISE_MIRROR = """
+\u4f60\u5728\u6821\u5bf9\u540c\u4e00\u573a\u4f1a\u7684\u53e6\u4e00\u4efd\u7eaa\u8981 \u2014\u2014 \u540c\u6837\u7684\u5185\u5bb9\uff0c\u53e6\u4e00\u79cd\u8bed\u8a00\u3002\u53e6\u4e00\u4efd\u7a3f\u5b50\u521a\u6309\u8bfb\u8005\u6807\u6ce8\u6539\u8fc7\uff0c\u6539\u4e86\u4ec0\u4e48\u5217\u5728\u6750\u6599\u91cc\u3002
+\u4f60\u8981\u505a\u7684\uff1a\u5728\u8fd9\u4efd\u7a3f\u5b50\u4e0a\u505a\u540c\u6837\u7684\u6539\u52a8\uff0c\u7528\u8fd9\u4efd\u7a3f\u5b50\u672c\u6765\u7684\u8bed\u8a00\u5199\u3002
+
+- \u53ea\u6539\u9700\u8981\u6539\u7684\u53e5\u5b50\uff0c\u5176\u4f59\u4e00\u4e2a\u5b57\u4e0d\u52a8\uff1a\u4e0d\u91cd\u6392\u3001\u4e0d\u6da6\u8272\u3001\u4e0d\u91cd\u65b0\u7ffb\u8bd1\u3002
+- \u8f93\u51fa\u53ea\u80fd\u662f\u7f16\u8f91\u5757\uff0c\u5757\u4ee5\u5916\u4e00\u4e2a\u5b57\u90fd\u4e0d\u8981\u5199\uff1a
+
+@@@ \u539f\u6587
+<\u8fd9\u4efd\u7a3f\u5b50\u91cc\u73b0\u5728\u7684\u53e5\u5b50\uff0c\u9010\u5b57\u7167\u6284>
+@@@ \u6539\u6210
+<\u6539\u597d\u7684\u53e5\u5b50>
+@@@ \u5b8c
+
+- \u539f\u6587\u8981\u9010\u5b57\u7167\u6284\uff0c\u542b\u6807\u70b9\u548c Markdown \u8bb0\u53f7\uff0c\u5e76\u4e14\u5728\u6587\u4ef6\u91cc\u552f\u4e00\uff1b\u62c5\u5fc3\u4e0d\u552f\u4e00\u5c31\u591a\u6284\u4e00\u884c\u3002
+- \u540c\u4e00\u5904\u9519\u5728\u8fd9\u4efd\u7a3f\u5b50\u522b\u5904\u4e5f\u51fa\u73b0\uff0c\u5c31\u6bcf\u5904\u5404\u5199\u4e00\u4e2a\u5757\u3002
+- \u4eba\u540d\u3001\u7cfb\u7edf\u540d\u3001\u672f\u8bed\u4e00\u5f8b\u7167\u65b0\u5199\u6cd5\uff0c\u4e0d\u8981\u7ffb\u8bd1\u3002
+- \u6807\u9898\u884c\uff08`## \u2026`\uff09\u4e0d\u8bb8\u52a8\uff0c\u4e0d\u8bb8\u6362\u8bed\u8a00\u3002
+- front matter \u91cc\u5b57\u6bb5\u540d\u3001\u987a\u5e8f\u3001\u65e5\u671f\u3001\u65f6\u957f\u4e0d\u52a8\uff0c\u4f46\u5199\u9519\u7684\u8bcd\u6216\u4eba\u540d\u4e00\u6837\u8981\u6539\u3002
+- \u8fd9\u4efd\u7a3f\u5b50\u5982\u679c\u5df2\u7ecf\u6ca1\u6709\u8981\u6539\u7684\u5730\u65b9\uff0c\u5c31\u53ea\u8f93\u51fa\u4e00\u884c\uff1a\u65e0\u9700\u6539\u52a8
+"""
+
+REV_INTRO_MIRROR = ("\u4e0b\u9762\u662f\u540c\u4e00\u573a\u4f1a\u7684\u53e6\u4e00\u8bed\u8a00\u7248\u7eaa\u8981\uff0c\u4ee5\u53ca\u53e6\u4e00\u4efd\u7a3f\u5b50\u521a\u6539\u4e86\u4ec0\u4e48\u3002"
+                    "\u8bf7\u6309\u4e0b\u9762\u7684\u89c4\u8303\uff0c\u628a\u540c\u6837\u7684\u6539\u52a8\u505a\u5230\u8fd9\u4efd\u7a3f\u5b50\u4e0a\u3002")
+
+
+def build_mirror_prompt(ses: Path, which: str, marks: list,
+                        pairs: list[tuple[str, str]]) -> dict:
+    """The other sheet, plus what changed on the first one. No transcript.
+
+    The facts were settled one round ago - the corrected sentences *are* the answer - so
+    sending the whole transcript again would double the wait to re-decide something
+    already decided. This prompt is a third of the size of a revise prompt and comes back
+    in a few seconds.
+    """
+    cur = _read(ses / which)
+    notes = "\n".join("- " + (((m.get("note") or "").strip())
+                              or (m.get("quote") or "")) for m in (marks or []))
+    ch = "\n\n".join("\u539f\u6765\uff1a\n%s\n\n\u6539\u6210\uff1a\n%s" % (a, b or "\uff08\u8fd9\u4e00\u6bb5\u5220\u6389\u4e86\uff09")
+                     for a, b in pairs)
+    user = ("# \u53e6\u4e00\u4efd\u7a3f\u5b50\u521a\u505a\u7684\u6539\u52a8\n\n" + ch
+            + "\n\n# \u8bfb\u8005\u5f53\u65f6\u8bf4\u7684\n\n" + (notes or "\uff08\u6ca1\u5199\uff09")
+            + "\n\n# \u73b0\u5728\u8fd9\u4efd\u7a3f\u5b50\uff08" + which + "\uff09\n\n" + cur.strip())
+    one = (REV_INTRO_MIRROR + "\n\n=============== \u89c4\u8303 ===============\n" + REVISE_MIRROR
+           + "\n\n=============== \u6750\u6599 ===============\n" + user)
+    return {"system": REVISE_MIRROR, "user": user, "one": one,
+            "heads": heads_of(cur), "chars": len(one),
+            "tokens_est": int(len(one) / 3.2)}
+
+
+def _mirror_once(ses: Path, cfg: dict, name: str, marks: list,
+                 pairs: list[tuple[str, str]], timeout: float) -> dict:
+    pr = build_mirror_prompt(ses, name, marks, pairs)
+    try:
+        if (cfg.get("engine") or "assistant") == "assistant":
+            raw = chat_cli(pr["one"], timeout=max(timeout, 1800.0), cwd=str(ses))
+        else:
+            raw = chat(cfg, pr["system"], pr["user"], timeout=timeout)
+    except Exception as exc:                                   # noqa: BLE001
+        return {"file": name, "how": "model", "hits": 0, "error": str(exc)[:300]}
+    edits = parse_edits(raw)
+    if not edits:
+        return {"file": name, "how": "model", "hits": 0,
+                "note": "\u65e0\u9700\u6539\u52a8" if "\u65e0\u9700\u6539\u52a8" in raw else "\u6a21\u578b\u6ca1\u7ed9\u7f16\u8f91\u5757"}
+    t, bad = apply_edits(_read(ses / name), edits)
+    if bad:
+        return {"file": name, "how": "model", "hits": 0, "problems": bad}
+    r = apply_draft(ses, t, name, pr["heads"])
+    if not r.get("ok"):
+        return {"file": name, "how": "model", "hits": 0,
+                "problems": r.get("problems") or []}
+    return {"file": name, "how": "model", "hits": len(edits)}
+
+
+def mirror(ses: Path, cfg: dict, which: str, marks: list,
+           timeout: float = 600.0) -> dict:
+    """Carry this round's fix over to the other language sheet.
+
+    A mark is about the meeting, not about one sheet: a term that is wrong in the Chinese
+    minutes is wrong in the English ones too, and a reader should not have to find the
+    same spot twice. Two routes, cheapest first. A one-word fix is the same string in both
+    files, so it is replaced directly and costs nothing at all. Anything bigger goes to
+    the model once, with the other sheet and this round's before/after - a few seconds,
+    not another full round.
+
+    Nothing here can lose text: every write goes through apply_draft, which validates the
+    result and keeps a .bak, and a failure is reported instead of retried.
+    """
+    out: dict = {"files": [], "pairs": 0, "terms": []}
+    rest = others(ses, which)
+    pairs = pairs_from_bak(ses, which)
+    out["pairs"] = len(pairs)
+    if not rest or not pairs:
+        return out
+    terms: list[tuple[str, str]] = []
+    for a, b in pairs:
+        p = term_pair(a, b)
+        if p and p not in terms:
+            terms.append(p)
+    out["terms"] = ["%s -> %s" % p for p in terms]
+    for name in rest:
+        t0 = _read(ses / name)
+        t, hits = t0, 0
+        for a, b in terms:
+            t, n = sub_term(t, a, b)
+            hits += n
+        if hits and t != t0 and not validate(t, heads_of(t0)):
+            r = apply_draft(ses, t, name, heads_of(t0))
+            if r.get("ok"):
+                out["files"].append({"file": name, "hits": hits, "how": "term"})
+                continue
+        out["files"].append(_mirror_once(ses, cfg, name, marks, pairs, timeout))
+    return out
+
+
 def revise(ses: Path, cfg: dict, which: str = "minutes.md",
            timeout: float = 600.0) -> dict:
     """One rewrite round. On success the answered marks move to history, so the counter
@@ -762,6 +970,10 @@ def revise(ses: Path, cfg: dict, which: str = "minutes.md",
     whenever a block cannot be placed exactly once - editing the wrong sentence quietly is
     worse than being slow - and the round is then retried as a full rewrite. A reader who
     marked one sentence sees one attempt or two, never a half-applied patch.
+
+    When the round lands, mirror() carries the same fix to the other language sheet, so a
+    reader who marks the Chinese page never has to hunt for the same spot in the English
+    one.
     """
     d = review_load(ses)
     marks = [m for m in d["open"] if (m.get("file") or "minutes.md") == which]
@@ -773,14 +985,20 @@ def revise(ses: Path, cfg: dict, which: str = "minutes.md",
             why.append(out["error"])
         out = _revise_once(ses, cfg, which, marks, "full", timeout)
         out["patch_failed"] = why
-    out["took"] = round(time.time() - t0, 1)
     out["marks"] = len(marks)
+    if out.get("ok"):
+        try:
+            out["mirror"] = mirror(ses, cfg, which, marks, timeout)
+        except Exception as exc:                               # noqa: BLE001
+            out["mirror"] = {"files": [], "error": str(exc)[:300]}
+    out["took"] = round(time.time() - t0, 1)
     if out.get("ok"):
         ids = {m.get("id") for m in marks}
         d["open"] = [m for m in d["open"] if m.get("id") not in ids]
         d["history"].append({"at": time.strftime("%Y-%m-%d %H:%M:%S"),
                              "file": which, "marks": marks,
-                             "mode": out.get("mode"), "took": out.get("took")})
+                             "mode": out.get("mode"), "took": out.get("took"),
+                             "mirror": out.get("mirror") or {}})
         review_save(ses, d)
     return out
 

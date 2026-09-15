@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.2.2"
+VERSION = "2.3.0"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -844,7 +844,7 @@ class H(BaseHTTPRequestHandler):
     #    so an edited file and a generated one are the same kind of file.
     def _minutes_write(self, cfg: dict, b: dict) -> dict:
         which = str(b.get("file") or "minutes.md")
-        if which not in ("minutes.md", "minutes.zh.md"):
+        if which not in llm.SHEETS:
             return {"error": f"不允许写入 {which}"}
         d = archive.resolve(config.staging(cfg) / str(b.get("session", "")))
         if not d.is_dir():
@@ -926,7 +926,7 @@ class H(BaseHTTPRequestHandler):
         if gate:
             return gate
         which = str(b.get("file") or "minutes.md")
-        if which not in ("minutes.md", "minutes.zh.md"):
+        if which not in llm.SHEETS:
             return {"error": f"\u4e0d\u5141\u8bb8\u5199\u5165 {which}"}
         d = archive.resolve(config.staging(cfg) / str(b.get("session", "")))
         if not d.is_dir():
@@ -963,7 +963,7 @@ class H(BaseHTTPRequestHandler):
         if not d.is_dir():
             return {"error": "找不到该会话"}
         which = str(b.get("file") or "minutes.md")
-        if which not in ("minutes.md", "minutes.zh.md"):
+        if which not in llm.SHEETS:
             return {"error": f"不允许标注 {which}"}
         op = str(b.get("op") or "add")
         if op == "add":
@@ -979,7 +979,7 @@ class H(BaseHTTPRequestHandler):
         if gate:
             return gate
         which = str(b.get("file") or "minutes.md")
-        if which not in ("minutes.md", "minutes.zh.md"):
+        if which not in llm.SHEETS:
             return {"error": f"不允许写入 {which}"}
         d = archive.resolve(config.staging(cfg) / str(b.get("session", "")))
         if not d.is_dir():

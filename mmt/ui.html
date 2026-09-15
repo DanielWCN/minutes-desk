@@ -1391,7 +1391,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.2.2';
+const UI_VERSION = '2.3.0';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2324,16 +2324,31 @@ function drawDoc(){
    where the words are. Everything after that is HTTP, so it happens here. A rewrite
    re-reads the transcript and rewrites minutes.md; it never re-runs recognition, so a
    session that has been confirmed stays confirmed and nothing takes minutes. */
-let REV = {n:0, open:[], rounds:0, name:''};
+let REV = {n:0, open:[], rounds:0, name:'', last:{}};
+/* Which sheet the round is running on. Captured when the button is pressed, because by
+   the time the result banner is drawn the marks are gone and revFile() has nothing left
+   to look at. */
+let revWhich = '';
 const revWho = () => { const e = engCur();
   return (e === 'assistant' && E && E.assistant) ? E.assistant : ENAME[e]; };
 const revFile = () => (REV.open[0] && REV.open[0].file) || 'minutes.md';
 
+/* What the round did to the other language sheet, in one clause or none. The numbers
+   come back inside review.json, so this is what actually happened, not a promise. */
+function mirrorSays(){
+  const m = (REV.last && REV.last.mirror) || {};
+  const done = (m.files || []).filter(f => (f.hits || 0) > 0);
+  if (!done.length) return '';
+  return '另一语言版的 ' + done.map(f => `<code>${f.file}</code> 改了 ${f.hits} 处`)
+                            .join('、') + '。';
+}
+
 async function revLoad(name){
-  REV = {n:0, open:[], rounds:0, name:name || ''};
+  REV = {n:0, open:[], rounds:0, name:name || '', last:{}};
   if (name){
     const r = await api('/api/review?session=' + encodeURIComponent(name));
-    if (!r.error) REV = {n:r.n || 0, open:r.open || [], rounds:r.rounds || 0, name:name};
+    if (!r.error) REV = {n:r.n || 0, open:r.open || [], rounds:r.rounds || 0, name:name,
+                         last:r.last || {}};
   }
   revPaint();
 }
@@ -2356,7 +2371,8 @@ function revPaint(){
     b.innerHTML = `<div class="wrt">
       <div class="w1"><b>${REV.n} 处待修</b> · ${auto
         ? '点「按标注重写」，' + esc(revWho())
-          + ' 会对着逐字稿只改这几处，其余段落原样保留。上一版会存成 <code>minutes.md.bak</code>。'
+          + ` 会对着逐字稿只改这几处，其余段落原样保留；同一个错在别处、在另一语言版里也会一起改。`
+          + `上一版会存成 <code>${revFile()}.bak</code>。`
         : '当前引擎只能复制粘贴：点「复制修订请求」，粘给 AI 助手，再用「粘回纪要」贴回来。'}</div>
       <div class="row">
         ${auto ? '<button class="btn pri" onclick="reviseGo()">按标注重写</button>' : ''}
@@ -2373,7 +2389,8 @@ async function revOp(body){
   if (!s) return null;
   const r = await api('/api/review', {session:s.name, ...body});
   if (r.error){ alert(r.error); return null; }
-  REV = {n:r.n || 0, open:r.open || [], rounds:r.rounds || 0, name:s.name};
+  REV = {n:r.n || 0, open:r.open || [], rounds:r.rounds || 0, name:s.name,
+         last:r.last || REV.last || {}};
   revPaint();
   return r;
 }
@@ -2404,10 +2421,12 @@ async function reviseGo(){
   jobKind = 'revise';
   flow = {sub:'正在启动…', t0:Date.now(), step:1, of:2};
   pgShow('按标注重写', '正在启动…');
+  revWhich = revFile();
   ban('busy', `正在按 ${REV.n} 处标注重写`,
-      '模型会重读整份逐字稿，但只交回要改的那几句，所以通常十几秒。上一版存成 '
-      + `<code>${revFile()}.bak</code>，改坏了可以拿回来。`);
-  watch(await api('/api/minutes/revise', {session:s.name, file:revFile()}), '#jlog');
+      '模型会重读整份逐字稿，但只交回要改的那几句，所以通常十几秒。改完会把同样的改动'
+      + '带到另一语言版的稿子上。上一版存成 '
+      + `<code>${revWhich}.bak</code>，改坏了可以拿回来。`);
+  watch(await api('/api/minutes/revise', {session:s.name, file:revWhich}), '#jlog');
 }
 /* Asked once, then never again: naming a program in assistants.json is not the same as
    agreeing that this meeting may be handed to it, and the model behind that program is
@@ -3225,8 +3244,9 @@ async function pollJob(){
       const s = ses(cur);
       docRev++; docSig = null; drawDoc();
       if (s) await revLoad(s.name);
+      const f = revWhich || revFile();
       ban('ok', `已按标注重写 · 用了 ${j.elapsed}s`,
-          `标注已清空，纸面是新版本。上一版存成了 <code>${revFile()}.bak</code>，`
+          `标注已清空，纸面是新版本。${mirrorSays()}上一版存成了 <code>${f}.bak</code>，`
           + '右上角「编辑正文」里可以自己再改。');
     } else if (kind === 'doc'){
       const s = ses(cur);

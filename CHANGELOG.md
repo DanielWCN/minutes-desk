@@ -12,6 +12,33 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.3.0
+
+- **A mark fixes both language sheets.** A mark is about the meeting, not about the page
+  you happen to be reading: a term that is wrong in the Chinese minutes is wrong in the
+  English ones too. When a round lands, the same fix is carried to the other sheet. A
+  one-word fix - a term, a name, a system - is the same string in both files, so it is
+  replaced directly, everywhere it stands on its own, at no cost and with no second model
+  call. `17` inside `2026-09-17` is not that word, and neither is `P&L` inside `P&Ls`.
+  Anything bigger than a word goes to the model once, with the other sheet and this
+  round's before/after but *not* the transcript - the facts were settled one round ago -
+  so it costs a few seconds rather than another full round.
+- Every mirrored write goes through the same validation and the same `.bak` as a normal
+  rewrite, and a failure is reported instead of retried: the other sheet is never left
+  half-edited.
+- The banner says what happened to the other sheet, with the count read back out of
+  `review.json`.
+
+- **标一处，两份稿子一起改。** 标注针对的是这场会，不是你正好在看的那一页 —— 中文稿里写错的
+  术语，英文稿里同样是错的。一轮改完，同样的改动会带到另一份稿子上。如果改的是一个词（术语、
+  人名、系统名），两份稿子里是同一个字符串，直接替换，凡是它独立成词的地方全都改，不花时间也
+  不用再问一次模型；`2026-09-17` 里的 `17`、`P&Ls` 里的 `P&L` 不算独立成词，不会误伤。
+  比一个词更大的改动，交给模型一次 —— 只给它另一份稿子和这一轮的前后对照，**不再发逐字稿**
+  （事实上一轮已经定了），所以只多几秒，不是再来一整轮。
+- 镜像过去的写入走的是和正常重写一样的校验、一样的 `.bak`；失败就报出来，不硬试，另一份稿子
+  不会留下改了一半的样子。
+- 提示条会说另一份稿子改了几处 —— 数字是从 `review.json` 读回来的，不是嘴上说的。
+
 ## v2.2.2
 
 - **Rewriting the Chinese minutes no longer fails on the way out.** The four headings were
