@@ -46,7 +46,16 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.0.1"
+VERSION = "2.1.0"
+
+# When this process started, and whether any page has spoken to it yet. The launcher
+# already ends the previous Python; these two let the browser side do the same for its
+# tab. A page polls /api/record/status, sees `boot` change, and reloads itself into the
+# new version - and because the server waits for that ping before it opens a browser, a
+# restart re-uses the tab that is already open instead of leaving another one behind.
+BOOT = int(time.time() * 1000)
+SEEN_PAGE = threading.Event()
+
 ROOT = HERE.parent
 UI = HERE / "ui.html"
 PY = sys.executable
@@ -478,7 +487,7 @@ class H(BaseHTTPRequestHandler):
             fresh = float(q.get("doctor", ["0"])[0]) == 1 or _doc_cache["data"] is None
             if fresh:
                 _doc_cache.update(at=time.time(), data=doctor.run(cfg))
-            self._json({"version": VERSION,
+            self._json({"version": VERSION, "boot": BOOT,
                         "config": cfg, "doctor": _doc_cache["data"],
                         "sessions": list_sessions(cfg),
                         "recording": self._rec_status(),
@@ -500,7 +509,13 @@ class H(BaseHTTPRequestHandler):
             self._json(self._prompt(config.load(), str(q.get("session", [""])[0]),
                                    str(q.get("file", ["minutes.md"])[0])))
         elif path == "/api/record/status":
-            self._json(self._rec_status())
+            # The page's 3 s heartbeat. It carries `boot` back, which is how a tab left over
+            # from the previous start finds out it is the old version and reloads itself.
+            # `?v=` is what says the page is new enough to do that: a page from before this
+            # existed would sit there stale while we decided not to open a fresh tab for it.
+            if q.get("v"):
+                SEEN_PAGE.set()
+            self._json({**self._rec_status(), "boot": BOOT})
         elif path.startswith("/api/job/"):
             self._json(_jobs.get(path.rsplit("/", 1)[-1], {"state": "unknown"}))
         elif path.startswith("/files/"):
@@ -1163,6 +1178,21 @@ class Srv(ThreadingHTTPServer):
     allow_reuse_address = False
 
 
+def _open_when_needed(url: str, wait_s: float = 1.8) -> None:
+    """Open a tab, unless a page is already talking to us.
+
+    A tab from the previous start keeps polling; the moment its server went away the
+    heartbeat speeds up, so it comes back within a second of this one binding the port,
+    sees a different `boot` and reloads itself. Opening a second tab on top of that is
+    exactly the pile-up we are trying to avoid. If nothing pings inside the window,
+    nobody has the app open and we open it.
+    """
+    if SEEN_PAGE.wait(wait_s):
+        print("a tab is already open - it reloads itself into this version")
+        return
+    webbrowser.open(url)
+
+
 def serve(port: int = 8760, open_browser: bool = True) -> int:
     url = f"http://127.0.0.1:{port}/"
     try:
@@ -1187,7 +1217,7 @@ def serve(port: int = 8760, open_browser: bool = True) -> int:
         print(f"first-run setup skipped: {e}")
     print(f"Minutes Desk v{VERSION}  ->  {url}\nclose this window to stop the app")
     if open_browser:
-        threading.Timer(0.7, lambda: webbrowser.open(url)).start()
+        threading.Thread(target=_open_when_needed, args=(url,), daemon=True).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

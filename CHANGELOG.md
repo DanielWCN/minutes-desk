@@ -12,6 +12,20 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.1.0
+
+- **Starting it again re-uses the tab you already have.** Double-clicking `Minutes Desk.bat`
+  has always ended the previous copy of the program; now it does the same for the page. The
+  tab already open notices the restart within about a second, reloads itself into the new
+  version, and no second tab is opened on top of it. So the tabs stop piling up, and the
+  page you are looking at can no longer be yesterday's HTML talking to today's Python,
+  which was the one failure that made a dozen unrelated things look broken.
+
+- **重新打开时用回你已经开着的那个标签页。** 双击 `Minutes Desk.bat` 一直会先结束上一份程序，
+  现在页面也一样：已经开着的那一页大约一秒内就会发现工具重启了，自己刷成新版本，不会再另开一个。
+  标签页不再越开越多，也不会再出现你看的是旧 HTML、背后是新 Python 这种情况——那一个问题
+  会让十几个不相关的地方看起来都是坏的。
+
 ## v2.0.1
 
 A fix release, from a bug report by a colleague who put a 53 minute meeting through it.

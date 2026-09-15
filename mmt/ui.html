@@ -1389,7 +1389,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.0.1';
+const UI_VERSION = '2.1.0';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2038,7 +2038,37 @@ async function recStart(){
   if (!tRec) tRec = setInterval(pollRec, 500);
 }
 async function recCmd(c){ await api('/api/record/cmd', {cmd:c}); }
-async function pollRec(){ drawRec(await api('/api/record/status')); }
+/* One tool, one tab. The launcher ends the previous Python; this ends the previous page.
+   `boot` is the moment the server started, so a value different from the one this page
+   loaded with means the tool was restarted and this tab is now yesterday's HTML talking
+   to today's Python - the one failure that makes a dozen unrelated things look broken.
+   Reloading here is also what lets the server skip opening a second tab: it waits for
+   this heartbeat before it touches the browser. While the server is down the beat speeds
+   up, so the tab is back on its feet about a second after the new window starts. */
+let boot0 = null, tBeat = null, beatMs = 0, downAt = 0;
+function beatEvery(ms){
+  if (beatMs === ms) return;
+  beatMs = ms;
+  if (tBeat) clearInterval(tBeat);
+  tBeat = setInterval(() => { if (!tRec && !tJob && !busy) pollRec(); }, ms);
+}
+async function pollRec(){
+  let st;
+  try { st = await api('/api/record/status?v=' + UI_VERSION); }
+  catch(e){
+    // The server went away, which normally means it is being restarted. Look four times a
+    // second for the first ten seconds so the new one finds us inside its window, then
+    // ease off - a tab left open next to a closed window should not knock all night.
+    if (!downAt) downAt = Date.now();
+    beatEvery(Date.now() - downAt < 10000 ? 250 : 1000);
+    return;
+  }
+  if (boot0 === null) boot0 = st.boot || 0;
+  else if (st.boot && st.boot !== boot0){ location.reload(); return; }
+  downAt = 0;
+  beatEvery(3000);
+  drawRec(st);
+}
 
 const TRACK = {mic:'本端语音（麦克风）', loopback:'对端语音（系统回环）'};
 function drawRec(st){
@@ -3306,6 +3336,11 @@ try { setLangUI(localStorage.getItem('mmt.uilang') || 'zh'); } catch(e){}
   await engLoad(0);
   if (!S.doctor.tested_at) await levels();
 })();
-setInterval(() => { if (!tRec && !tJob && !busy) pollRec(); }, 3000);
+beatEvery(3000);
+/* A background tab has its timers throttled hard, so it can sit on the old version for a
+   while. Check the moment it is looked at again. */
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !tRec && !tJob && !busy) pollRec();
+});
 </script>
 </body></html>
