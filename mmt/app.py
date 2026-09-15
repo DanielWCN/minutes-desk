@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.2.1"
+VERSION = "2.2.2"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -881,12 +881,16 @@ class H(BaseHTTPRequestHandler):
 
     def _prompt(self, cfg: dict, name: str, which: str, mode: str = "draft") -> dict:
         """The text for the copy-paste route. `mode=revise` asks for the rewrite request
-        instead of the first draft, so the paper's marks still work without a CLI."""
+        instead of the first draft, so the paper's marks still work without a CLI.
+
+        Always the full-rewrite wording, never the edit-block one the button uses: what
+        comes back here is pasted into the editor by a person, and edit blocks would be a
+        set of instructions with nothing to carry them out."""
         d = archive.resolve(config.staging(cfg) / name)
         if not d.is_dir():
             return {"error": "\u627e\u4e0d\u5230\u8be5\u4f1a\u8bdd"}
         which = which if which in ("minutes.md", "minutes.zh.md") else "minutes.md"
-        pr = (llm.build_revise_prompt(d, which) if mode == "revise"
+        pr = (llm.build_revise_prompt(d, which, None, "full") if mode == "revise"
               else llm.build_prompt(d, which))
         if pr.get("error"):
             return pr

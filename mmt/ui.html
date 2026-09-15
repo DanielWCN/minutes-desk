@@ -1391,7 +1391,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.2.1';
+const UI_VERSION = '2.2.2';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2405,8 +2405,8 @@ async function reviseGo(){
   flow = {sub:'正在启动…', t0:Date.now(), step:1, of:2};
   pgShow('按标注重写', '正在启动…');
   ban('busy', `正在按 ${REV.n} 处标注重写`,
-      '模型会重读整份逐字稿，只改标注到的地方。上一版存成 <code>minutes.md.bak</code>，'
-      + '改坏了可以拿回来。');
+      '模型会重读整份逐字稿，但只交回要改的那几句，所以通常十几秒。上一版存成 '
+      + `<code>${revFile()}.bak</code>，改坏了可以拿回来。`);
   watch(await api('/api/minutes/revise', {session:s.name, file:revFile()}), '#jlog');
 }
 /* Asked once, then never again: naming a program in assistants.json is not the same as
@@ -3226,7 +3226,7 @@ async function pollJob(){
       docRev++; docSig = null; drawDoc();
       if (s) await revLoad(s.name);
       ban('ok', `已按标注重写 · 用了 ${j.elapsed}s`,
-          '标注已清空，纸面是新版本。上一版存成了 <code>minutes.md.bak</code>，'
+          `标注已清空，纸面是新版本。上一版存成了 <code>${revFile()}.bak</code>，`
           + '右上角「编辑正文」里可以自己再改。');
     } else if (kind === 'doc'){
       const s = ses(cur);

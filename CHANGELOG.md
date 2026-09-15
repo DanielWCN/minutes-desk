@@ -12,6 +12,33 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.2.2
+
+- **Rewriting the Chinese minutes no longer fails on the way out.** The four headings were
+  checked against the English ones, so a correct rewrite of `minutes.zh.md` (`## 摘要`,
+  `## 决定`, ...) was rejected by this program, not by the model: 37 seconds of work thrown
+  away with "缺少 ## Summary". A rewrite now has to keep the headings the file already had,
+  whatever language they are in.
+- **A rewrite takes about half as long.** The model is asked for the sentences that change,
+  not for the whole file back: it still reads the entire transcript, but it types a few
+  hundred characters instead of three thousand. Measured on a 33-minute meeting: 37s before,
+  18-21s now. If a returned block cannot be placed in the file exactly once, the round is
+  retried as a full rewrite rather than guessed at, so a badly quoted edit costs time and
+  never lands in the wrong sentence.
+- The same mistake in more than one place is fixed in all of them. A wrong name in a decision
+  is usually a wrong name in the summary too, and asking twice for that was silly.
+- The banner now names the file it kept a copy of: `minutes.zh.md.bak` when that is what you
+  were reading.
+
+- **中文纪要按标注重写不再白跑。** 校验器只认英文那四个标题，所以 `minutes.zh.md`（`## 摘要`、
+  `## 决定`…）改对了反而被本程序判失败 —— 37 秒的活白干，还报「缺少 ## Summary」。现在的规则是：
+  重写必须保留这份文件原本的标题，不管它是什么语言。
+- **重写快了大约一半。** 现在只让模型交回要改的那几句，而不是整份文件重打一遍；逐字稿照样整份
+  读完。33 分钟的会实测：以前 37 秒，现在 18-21 秒。如果交回来的块在文件里定位不唯一，这一轮
+  改判为整篇重写，绝不猜 —— 宁可慢一次，也不许改错句子。
+- 同一个错在别处也出现的话一起改。决定里人名错了，摘要里通常也错，让你标两次是没道理的。
+- 提示条会说清备份的是哪个文件：你看的是中文那份，存的就是 `minutes.zh.md.bak`。
+
 ## v2.2.1
 
 - **Minutes written before this release can be marked too.** The behaviour inside the paper
