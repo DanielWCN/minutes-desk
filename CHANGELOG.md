@@ -12,6 +12,19 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.2.1
+
+- **Minutes written before this release can be marked too.** The behaviour inside the paper
+  is the document's own code, so a document rendered last week had no way to be marked no
+  matter how new the app around it was: the bar invited you to drag across a sentence and
+  nothing happened. A document now carries the version it was rendered with, and a stale one
+  is re-rendered from `minutes.md` the moment it is opened. Same words, same layout, one
+  extra second on the first open and nothing on the next.
+
+- **以前的会议也能标了。** 划句子的能力住在纸里面，所以上周渲染出来的那份纪要，不管外面
+  的程序多新，都划不动 —— 横条请你划，划了却没反应。现在每份文档都带着渲染它的版本号，
+  旧的一打开就按 `minutes.md` 重排一次。字和排版都不变，第一次打开多花一秒，之后没有。
+
 ## v2.2.0
 
 - **Mark what is wrong on the paper, and one button fixes exactly that.** Drag across a

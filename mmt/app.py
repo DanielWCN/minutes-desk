@@ -36,6 +36,7 @@ import doctor
 import llm
 import minutes as M
 import outlook
+import report
 
 HERE = Path(__file__).resolve().parent
 
@@ -46,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.2.0"
+VERSION = "2.2.1"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -548,7 +549,32 @@ class H(BaseHTTPRequestHandler):
             ctype = "text/plain; charset=utf-8"
         if f.suffix == ".html":
             ctype = "text/html; charset=utf-8"
+        if f.name == "minutes.html":
+            f = self._doc_fresh(cfg, base, f)
         self._send_range(f, ctype)
+
+    # -- a document rendered by an older version carries none of the current behaviour of
+    #    the paper: marking a sentence is the document's own code, and no amount of new app
+    #    around it puts that code into a file written last week. Rather than ask a person to
+    #    re-save every finished meeting, re-render once, here, the moment the stale file is
+    #    asked for. Failure is not fatal - the old page still opens, it just cannot be marked.
+    def _doc_fresh(self, cfg: dict, base: Path, f: Path) -> Path:
+        try:
+            with f.open("rb") as fh:
+                head = fh.read(800).decode("utf-8", "replace")
+            m = re.search(r'data-rv="(\d+)"', head)
+            if m and int(m.group(1)) >= report.RV:
+                return f
+            if not (base / "minutes.md").is_file():
+                return f
+            argv = [PY, "-u", str(HERE / "report.py"), str(base)]
+            if cfg.get("me"):
+                argv += ["--me", cfg["me"]]
+            subprocess.run(argv, capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=180)
+        except Exception:                                      # noqa: BLE001
+            pass
+        return f
 
     def _send_range(self, f: Path, ctype: str) -> None:
         """Stream, and honour Range. An hour of screen.mp4 is ~340 MB: reading that into a

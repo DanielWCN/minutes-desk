@@ -37,6 +37,13 @@ from pathlib import Path
 import minutes as M
 
 # --------------------------------------------------------------------------- constants
+# The behaviour inside the paper - selecting a sentence, marking it, drawing the
+# underline - is the document's own JavaScript, not the app's. A file rendered by an
+# older version therefore cannot be marked however new the app around it is. This stamp
+# lands on <body>; app.py compares it and re-renders a stale document before serving it,
+# so a meeting finished last week does not have to be re-saved by hand. Bump it whenever
+# the in-paper behaviour changes.
+RV = 2
 # Outlook throws away <style>, so anything inside the copy zone is styled inline.
 _F = "font-family:'Segoe UI',Arial,'Microsoft YaHei',sans-serif"
 # Inline styles for the pasteable sheet. Same greys as the page (Ant neutrals), but
@@ -1034,7 +1041,7 @@ def main() -> int:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{e(title)} - Minutes</title><style>{CSS}</style>
 <script>try{{document.documentElement.dataset.theme=localStorage.getItem('mmt.theme')||'dark';}}catch(e){{document.documentElement.dataset.theme='dark';}}</script>
-<body data-l="{deflang}" data-orig="{orig}" data-def="{deflang}">
+<body data-rv="{RV}" data-l="{deflang}" data-orig="{orig}" data-def="{deflang}">
 <div class="rail"><div class="in">
  <div class="ttl">{e(title)}</div>
  <nav><a href="#s1">纪要</a><a href="#s2" onclick="document.getElementById('s2').open=true">逐字稿</a><a href="#s3">附录</a></nav>
