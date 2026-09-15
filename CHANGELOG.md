@@ -12,6 +12,34 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.2.0
+
+- **Mark what is wrong on the paper, and one button fixes exactly that.** Drag across a
+  sentence in the minutes and a chip says "there is a problem here"; type one line about
+  what is wrong and the sentence gets a yellow underline and a number. The bar above the
+  paper then counts them and offers **rewrite from the marks**: the assistant re-reads the
+  transcript and changes only the places you marked, leaving every other paragraph exactly
+  as it was. It does not re-run recognition, so a session you have already confirmed stays
+  confirmed and nothing takes minutes. The previous version is kept as `minutes.md.bak`.
+  Marks live in `review.json` beside the minutes and survive a re-render, so you can mark
+  five things and fix them in one round. If your engine has no command line the same button
+  becomes **copy the revision request**, which is the old copy-and-paste route with the
+  marks written into the prompt.
+- **The assistant is asked for permission once.** Naming a program in `assistants.json` is
+  not the same as agreeing that a meeting may be handed to it, so the first automatic write
+  asks in plain words, once, and never again. The model behind that program is not
+  necessarily on this machine, and the tool says so.
+
+- **在纸上标出哪里不对，一个按钮就照着改。** 在纪要上划选一句话，会跳出「这里有问题」；写一行
+  为什么，那句话就带上黄色下划线和编号。纸的上方会数出「N 处待修」，旁边就是**按标注重写**：
+  助手重读一遍逐字稿，只改你标到的地方，其余段落原样保留。它不会重跑语音识别，所以已经确认过的
+  会话仍然是确认过的，也不用等几分钟。上一版会存成 `minutes.md.bak`。标注存在纪要旁边的
+  `review.json` 里，重排之后还在，所以可以一次标五处、一轮改完。如果你的引擎没有命令行，同一个
+  按钮变成**复制修订请求**——还是原来的复制粘贴，只是提示词里带上了这些标注。
+- **交给助手这件事只问一次。** 在 `assistants.json` 里写下一个程序的名字，不等于同意把会议内容
+  交给它，所以第一次自动写正文时会明确问一次，之后不再问。那个程序背后的模型不一定在这台机器上，
+  工具会把这句话说清楚。
+
 ## v2.1.0
 
 - **Starting it again re-uses the tab you already have.** Double-clicking `Minutes Desk.bat`

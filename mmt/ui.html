@@ -811,7 +811,9 @@ body.zen .col.ses{display:none}
 
 /* the alert and the paper are one stack, and the rail is beside the stack */
 .col.doc .cb>.pw{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:8px}
-.col.doc .cb>.pw>.alert,.col.doc .cb>.pw>.wrt{flex:none}
+.col.doc .cb>.pw>.alert,.col.doc .cb>.pw>.wrt,.col.doc .cb>.pw>.rev{flex:none}
+.rev:empty{display:none}
+.rev .rvh{font-size:11.5px;color:var(--faint);padding:1px 3px 0}
 
 /* ---- the minutes engine ------------------------------------------- */
 /* Three routes to a body of text, and exactly one of them live. The card is a chooser,
@@ -1389,7 +1391,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.1.0';
+const UI_VERSION = '2.2.0';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2312,8 +2314,114 @@ function drawDoc(){
   }
   st.textContent = s.minutes_written ? '\u2713 \u6b63\u6587\u5df2\u5199' : '\u5f85\u649b\u5199\u6b63\u6587';
   st.className = 'tag ' + (s.minutes_written ? 'green' : 'gold');
-  $('#doc_bd').innerHTML = `<div class="pw">${wrtBar(s)}<iframe class="docf" src="${
+  $('#doc_bd').innerHTML = `<div class="pw">${wrtBar(s)}<div class="rev" id="revbar"></div><iframe class="docf" src="${
     url(s.name, 'minutes.html')}" title="\u7eaa\u8981"></iframe></div>`;
+  revLoad(s.name);
+}
+
+/* ============================================== the marks a reader left on the paper
+   Selecting a wrong sentence and saying why happens inside the paper, because that is
+   where the words are. Everything after that is HTTP, so it happens here. A rewrite
+   re-reads the transcript and rewrites minutes.md; it never re-runs recognition, so a
+   session that has been confirmed stays confirmed and nothing takes minutes. */
+let REV = {n:0, open:[], rounds:0, name:''};
+const revWho = () => { const e = engCur();
+  return (e === 'assistant' && E && E.assistant) ? E.assistant : ENAME[e]; };
+const revFile = () => (REV.open[0] && REV.open[0].file) || 'minutes.md';
+
+async function revLoad(name){
+  REV = {n:0, open:[], rounds:0, name:name || ''};
+  if (name){
+    const r = await api('/api/review?session=' + encodeURIComponent(name));
+    if (!r.error) REV = {n:r.n || 0, open:r.open || [], rounds:r.rounds || 0, name:name};
+  }
+  revPaint();
+}
+/* The paper cannot know which marks are open, so it is told - on every change, and again
+   whenever it says it has painted, because a reload throws its copy away. */
+function revPush(){
+  const f = $('#doc_bd .docf');
+  if (f && f.contentWindow)
+    try { f.contentWindow.postMessage({mmt:'marks', list:REV.open}, '*'); } catch(e){}
+}
+function revPaint(){
+  const b = $('#revbar'), s = ses(cur);
+  if (!b) return;
+  if (!s || !s.has_minutes){ b.innerHTML = ''; return; }
+  const auto = E ? !!E.can_auto : engCur() !== 'assistant';
+  if (!REV.n){
+    b.innerHTML = '<div class="rvh">在纸上划选任意一句，就会跳出「这里有问题」'
+      + (REV.rounds ? ` · 已按标注重写过 ${REV.rounds} 轮` : '') + '</div>';
+  } else {
+    b.innerHTML = `<div class="wrt">
+      <div class="w1"><b>${REV.n} 处待修</b> · ${auto
+        ? '点「按标注重写」，' + esc(revWho())
+          + ' 会对着逐字稿只改这几处，其余段落原样保留。上一版会存成 <code>minutes.md.bak</code>。'
+        : '当前引擎只能复制粘贴：点「复制修订请求」，粘给 AI 助手，再用「粘回纪要」贴回来。'}</div>
+      <div class="row">
+        ${auto ? '<button class="btn pri" onclick="reviseGo()">按标注重写</button>' : ''}
+        <button class="btn${auto ? '' : ' pri'}" onclick="revCopy()">复制修订请求</button>
+        ${auto ? '' : '<button class="btn" onclick="pasteStart()">粘回纪要</button>'}
+        <button class="btn" onclick="revClear()">清空标注</button>
+        <span class="f1"></span><span class="msg" id="revmsg"></span>
+      </div></div>`;
+  }
+  revPush();
+}
+async function revOp(body){
+  const s = ses(cur);
+  if (!s) return null;
+  const r = await api('/api/review', {session:s.name, ...body});
+  if (r.error){ alert(r.error); return null; }
+  REV = {n:r.n || 0, open:r.open || [], rounds:r.rounds || 0, name:s.name};
+  revPaint();
+  return r;
+}
+const revAdd = d => revOp({op:'add', quote:d.quote || '', note:d.note || '',
+                           file:d.file || 'minutes.md'});
+const revDel = id => revOp({op:'del', id:id});
+function revClear(){
+  if (REV.n && !confirm(`清掉这 ${REV.n} 处标注？`)) return;
+  revOp({op:'clear'});
+}
+async function revCopy(){
+  const s = ses(cur), m = $('#revmsg');
+  if (!s) return;
+  if (m) m.textContent = '正在准备…';
+  const r = await api('/api/prompt?mode=revise&session=' + encodeURIComponent(s.name)
+                      + '&file=' + encodeURIComponent(revFile()));
+  if (r.error){ if (m) m.textContent = ''; alert(r.error); return; }
+  const ok = await cp(r.text);
+  if (m) m.textContent = ok
+    ? `已复制 ${Math.round(r.chars / 1000)}k 字，里面带着这 ${REV.n} 处标注`
+    : '复制失败';
+}
+async function reviseGo(){
+  const s = ses(cur), m = $('#revmsg');
+  if (!s || !REV.n) return;
+  if (!await cliOk()) return;
+  if (m) m.textContent = '正在启动…';
+  jobKind = 'revise';
+  flow = {sub:'正在启动…', t0:Date.now(), step:1, of:2};
+  pgShow('按标注重写', '正在启动…');
+  ban('busy', `正在按 ${REV.n} 处标注重写`,
+      '模型会重读整份逐字稿，只改标注到的地方。上一版存成 <code>minutes.md.bak</code>，'
+      + '改坏了可以拿回来。');
+  watch(await api('/api/minutes/revise', {session:s.name, file:revFile()}), '#jlog');
+}
+/* Asked once, then never again: naming a program in assistants.json is not the same as
+   agreeing that this meeting may be handed to it, and the model behind that program is
+   not necessarily on this machine. Same shape as the API acknowledgement. */
+async function cliOk(){
+  if (engCur() !== 'assistant') return true;
+  if (E && E.cli_ack) return true;
+  const who = (E && E.assistant_exe) || 'assistants.json 里那个程序';
+  if (!confirm('接下来会把这场会的逐字稿和纪要，交给 ' + who + ' 背后的模型处理。'
+      + '那个模型不一定在这台机器上。\n\n只问这一次，以后不再问。\n\n继续？')) return false;
+  const r = await api('/api/config', {cli_ack:true});
+  if (r.error){ alert(r.error); return false; }
+  await engLoad(0);
+  return !!(E && E.cli_ack);
 }
 
 /* A skeleton full of TBD is not minutes. The bar sits above the paper only while the
@@ -2671,6 +2779,7 @@ async function pasteGo(force){
 async function draftGo(){
   const s = ses(cur), m = $('#wrtmsg');
   if (!s) return;
+  if (!await cliOk()) return;
   if (m) m.textContent = '正在启动…';
   jobKind = 'draft';
   flow = {sub:'正在启动…', t0:Date.now(), step:1, of:2};
@@ -3086,7 +3195,8 @@ async function pollJob(){
     CF = null;                       // whatever the job wrote, re-read it from disk
     await refresh(0);
     if (kind && j.state === 'failed')
-      ban('fail', (kind === 'asr' ? '语音识别失败' : '生成文档失败'),
+      ban('fail', (kind === 'asr' ? '语音识别失败'
+                   : kind === 'revise' ? '按标注重写失败' : '生成文档失败'),
           '原因见日志末尾几行（在上方进度条的「查看日志」里）。可截图发送给 AI 助手 定位。');
     else if (kind === 'asr'){
       const s = ses(cur);
@@ -3110,6 +3220,14 @@ async function pollJob(){
         ban('fail', '草稿没写成',
             '原因见上方「查看日志」的最后几行。最常见的是模型名或密钥不对，'
             + '也可能模型返回的内容不是一份完整的 minutes.md。');
+    } else if (kind === 'revise'){
+      // minutes_written does not change, so the paper has to be told to reload by hand
+      const s = ses(cur);
+      docRev++; docSig = null; drawDoc();
+      if (s) await revLoad(s.name);
+      ban('ok', `已按标注重写 · 用了 ${j.elapsed}s`,
+          '标注已清空，纸面是新版本。上一版存成了 <code>minutes.md.bak</code>，'
+          + '右上角「编辑正文」里可以自己再改。');
     } else if (kind === 'doc'){
       const s = ses(cur);
       ban('ok', `逐字稿已生成 \u00b7 用了 ${j.elapsed}s`,
@@ -3324,7 +3442,10 @@ function gutInit(){
 /* The paper announces itself when it has painted, and gets told the palette then:
    the iframe can load long after the switch was last touched. */
 addEventListener('message', e => {
-  if (e.data && e.data.mmt === 'paper-ready'){ pushTheme(); pushLang(); }
+  const d = e.data || {};
+  if (d.mmt === 'paper-ready'){ pushTheme(); pushLang(); revPush(); }
+  else if (d.mmt === 'flag') revAdd(d);
+  else if (d.mmt === 'unflag') revDel(d.id);
 });
 setTheme(document.documentElement.dataset.theme || 'dark');
 $('#ver').textContent = 'v' + UI_VERSION;   // one literal, put where it can be read off

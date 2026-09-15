@@ -110,6 +110,10 @@ def defaults() -> dict:
         # True once the user has acknowledged, for a non-local endpoint, that the
         # transcript leaves this machine. Asked once, never again.
         "api_ack": False,
+        # True once the user has agreed that the local assistant CLI named in
+        # assistants.json may be handed a transcript. Same shape as api_ack, asked once:
+        # that program has its own model behind it, wherever that model runs.
+        "cli_ack": False,
         "setup_done": False,
         # The result of the last real test-record, so opening the tool shows a result
         # instead of "not tested yet". {"at": iso, "mic": dbfs, "loopback": dbfs, "state": ...}

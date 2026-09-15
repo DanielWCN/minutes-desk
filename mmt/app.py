@@ -46,7 +46,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -507,7 +507,10 @@ class H(BaseHTTPRequestHandler):
             self._json(self._engine(config.load()))
         elif path == "/api/prompt":
             self._json(self._prompt(config.load(), str(q.get("session", [""])[0]),
-                                   str(q.get("file", ["minutes.md"])[0])))
+                                   str(q.get("file", ["minutes.md"])[0]),
+                                   str(q.get("mode", ["draft"])[0])))
+        elif path == "/api/review":
+            self._json(self._review_read(config.load(), str(q.get("session", [""])[0])))
         elif path == "/api/record/status":
             # The page's 3 s heartbeat. It carries `boot` back, which is how a tab left over
             # from the previous start finds out it is the old version and reloads itself.
@@ -647,6 +650,10 @@ class H(BaseHTTPRequestHandler):
             self._json(self._draft(cfg, b))
         elif path == "/api/minutes/paste":
             self._json(self._paste(cfg, b))
+        elif path == "/api/minutes/revise":
+            self._json(self._revise(cfg, b))
+        elif path == "/api/review":
+            self._json(self._review_write(cfg, b))
 
         elif path == "/api/archive":
             d = config.staging(cfg) / str(b.get("session", ""))
@@ -841,36 +848,53 @@ class H(BaseHTTPRequestHandler):
         d["ol_model"] = cfg.get("ol_model") or ""
         d["ollama_base"] = llm.OLLAMA_BASE
         d["api_ack"] = bool(cfg.get("api_ack"))
+        d["cli_ack"] = bool(cfg.get("cli_ack"))
         d["api_local"] = llm.is_local(str(cfg.get("api_base") or ""))
         d["can_auto"] = llm.can_auto(cfg)
         return d
 
-    def _prompt(self, cfg: dict, name: str, which: str) -> dict:
+    def _prompt(self, cfg: dict, name: str, which: str, mode: str = "draft") -> dict:
+        """The text for the copy-paste route. `mode=revise` asks for the rewrite request
+        instead of the first draft, so the paper's marks still work without a CLI."""
         d = archive.resolve(config.staging(cfg) / name)
         if not d.is_dir():
             return {"error": "\u627e\u4e0d\u5230\u8be5\u4f1a\u8bdd"}
-        pr = llm.build_prompt(d, which if which in ("minutes.md", "minutes.zh.md") else "minutes.md")
+        which = which if which in ("minutes.md", "minutes.zh.md") else "minutes.md"
+        pr = (llm.build_revise_prompt(d, which) if mode == "revise"
+              else llm.build_prompt(d, which))
         if pr.get("error"):
             return pr
         return {"ok": True, "text": pr["one"], "chars": pr["chars"],
                 "tokens_est": pr["tokens_est"]}
 
+    def _engine_gate(self, cfg: dict) -> dict:
+        """What stops an automatic write, in words. Empty means go ahead.
+
+        The assistant CLI needs its own acknowledgement even though a human wrote
+        assistants.json: naming a program is not the same as agreeing that this meeting
+        may be handed to it, and the model behind that program is not necessarily on this
+        machine. `ask` tells the page to offer that agreement instead of a dead error.
+        """
+        eng = cfg.get("engine") or "assistant"
+        if not llm.can_auto(cfg):
+            return {"error": "当前纪要引擎是「交给 AI 助手」，而 assistants.json 里没给 cli 命令，"
+                             "所以它只能靠复制粘贴。用「复制提示词」那个按钮，"
+                             "或者去设置里换成 API / Ollama"}
+        if eng == "assistant" and not cfg.get("cli_ack"):
+            return {"error": "还没同意把会议内容交给这个助手程序", "ask": "cli",
+                    "who": llm.detect().get("assistant_exe") or "assistants.json 里那个程序"}
+        if (eng == "api" and not llm.is_local(str(cfg.get("api_base") or ""))
+                and not cfg.get("api_ack")):
+            return {"error": "这个接口不在本机。请先在设置里勾选「可以把会议内容发给这个服务」",
+                    "ask": "api"}
+        return {}
+
     def _draft(self, cfg: dict, b: dict) -> dict:
         """A cloud model answers in 20 s, a 7B on a CPU can take 8 minutes. So this is a
         job with a log, like transcription, not a request the page waits on."""
-        if not llm.can_auto(cfg):
-            return {"error": "\u5f53\u524d\u7eaa\u8981\u5f15\u64ce\u662f\u300c\u4ea4\u7ed9 AI \u52a9\u624b\u300d\uff0c"
-                             "\u800c assistants.json \u91cc\u6ca1\u7ed9 cli \u547d\u4ee4\uff0c"
-                             "\u6240\u4ee5\u5b83\u53ea\u80fd\u9760\u590d\u5236\u7c98\u8d34\u3002"
-                             "\u7528\u300c\u590d\u5236\u63d0\u793a\u8bcd\u300d\u90a3\u4e2a\u6309\u94ae\uff0c"
-                             "\u6216\u8005\u53bb\u8bbe\u7f6e\u91cc\u6362\u6210 API / Ollama"}
-        if ((cfg.get("engine") or "") == "api"
-                and not llm.is_local(str(cfg.get("api_base") or ""))
-                and not cfg.get("api_ack")):
-            return {"error": "\u8fd9\u4e2a\u63a5\u53e3\u4e0d\u5728\u672c\u673a\u3002"
-                             "\u8bf7\u5148\u5728\u8bbe\u7f6e\u91cc\u52fe\u9009"
-                             "\u300c\u53ef\u4ee5\u628a\u4f1a\u8bae\u5185\u5bb9"
-                             "\u53d1\u7ed9\u8fd9\u4e2a\u670d\u52a1\u300d"}
+        gate = self._engine_gate(cfg)
+        if gate:
+            return gate
         which = str(b.get("file") or "minutes.md")
         if which not in ("minutes.md", "minutes.zh.md"):
             return {"error": f"\u4e0d\u5141\u8bb8\u5199\u5165 {which}"}
@@ -894,6 +918,48 @@ class H(BaseHTTPRequestHandler):
             return {"error": "\u8fd9\u6bb5\u5185\u5bb9\u4e0d\u50cf\u4e00\u4efd\u5b8c\u6574\u7684 minutes.md",
                     "problems": bad}
         return self._minutes_write(cfg, {**b, "text": text})
+
+    # -- the marks a reader left on the finished paper, and the one button that answers
+    #    them. Rewriting re-reads the transcript and re-writes minutes.md; it does not
+    #    re-run recognition, so a confirmed session stays confirmed.
+    def _review_read(self, cfg: dict, name: str) -> dict:
+        d = archive.resolve(config.staging(cfg) / name)
+        if not d.is_dir():
+            return {"error": "找不到该会话"}
+        return llm.review(d)
+
+    def _review_write(self, cfg: dict, b: dict) -> dict:
+        d = archive.resolve(config.staging(cfg) / str(b.get("session", "")))
+        if not d.is_dir():
+            return {"error": "找不到该会话"}
+        which = str(b.get("file") or "minutes.md")
+        if which not in ("minutes.md", "minutes.zh.md"):
+            return {"error": f"不允许标注 {which}"}
+        op = str(b.get("op") or "add")
+        if op == "add":
+            return llm.review_add(d, str(b.get("quote") or ""), str(b.get("note") or ""), which)
+        if op == "del":
+            return llm.review_del(d, str(b.get("id") or ""))
+        if op == "clear":
+            return llm.review_clear(d)
+        return {"error": f"未知操作 {op}"}
+
+    def _revise(self, cfg: dict, b: dict) -> dict:
+        gate = self._engine_gate(cfg)
+        if gate:
+            return gate
+        which = str(b.get("file") or "minutes.md")
+        if which not in ("minutes.md", "minutes.zh.md"):
+            return {"error": f"不允许写入 {which}"}
+        d = archive.resolve(config.staging(cfg) / str(b.get("session", "")))
+        if not d.is_dir():
+            return {"error": "找不到该会话"}
+        pr = llm.build_revise_prompt(d, which)
+        if pr.get("error"):
+            return pr
+        return start_job(f"按标注重写 {d.name}",
+                         [PY, "-u", str(HERE / "llm.py"), str(d), "--revise",
+                          "--file", which])
 
     # -- the confirm step: everything a human has to answer, in one place
     def _confirm_read(self, cfg: dict, name: str) -> dict:

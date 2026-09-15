@@ -173,6 +173,27 @@ details.sect>summary:hover>h2,details.sect>summary:hover .cnt{color:var(--link)}
 /* The sheet is white in BOTH themes on purpose: it is the email body, and copyz()
    copies the live computed styles, so a dark sheet would paste dark into Outlook.
    This caption says so out loud, otherwise the white block reads as a styling bug. */
+/* ---- marks a reader leaves on the paper. Only ever inside the app shell: the paper
+   alone has nowhere to save them to. The sheet stays white in dark mode, so do these. */
+mark.mkq{background:#fff3bf;color:inherit;border-radius:2px;padding:0 1px;
+ box-shadow:inset 0 -2px 0 #f0a500;cursor:pointer}
+mark.mkq:hover{background:#ffe9a8}
+mark.mkq[data-n]::after{content:attr(data-n);font-size:9px;line-height:1;
+ vertical-align:super;color:#b26b00;font-weight:700;margin-left:1px}
+.mkui{position:absolute;z-index:60;font:500 12px/1.45 var(--sans);color:#e6e8ea}
+.mkchip{background:#1d2126;border:1px solid rgba(255,255,255,.14);border-radius:999px;
+ padding:5px 11px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.4);white-space:nowrap;
+ -webkit-user-select:none;user-select:none}
+.mkchip:hover{background:#262b31}
+.mkbox{background:#1d2126;border:1px solid rgba(255,255,255,.14);border-radius:10px;
+ padding:10px;width:300px;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+.mkbox .q{font-size:11px;color:#9aa2ab;margin-bottom:7px;max-height:52px;overflow:hidden}
+.mkbox input{width:100%;box-sizing:border-box;background:#12161a;color:#e6e8ea;
+ border:1px solid rgba(255,255,255,.16);border-radius:7px;padding:6px 8px;font:inherit}
+.mkbox .row2{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
+.mkbox button{font:inherit;border-radius:7px;padding:5px 10px;cursor:pointer;
+ background:#262b31;color:#e6e8ea;border:1px solid rgba(255,255,255,.14)}
+.mkbox button.pri{background:#2563eb;border-color:#2563eb;color:#fff}
 .pvw{display:flex;align-items:center;gap:7px;margin:0 2px 9px;
  font-size:12px;line-height:1.5;color:var(--faint)}
 .pvw svg{width:13px;height:13px;flex:none;stroke:currentColor;stroke-width:1.7;fill:none;
@@ -383,7 +404,8 @@ addEventListener('message',function(e){var d=e.data||{};
  if(d.mmt==='theme'&&d.theme)setTheme(d.theme);
  /* The shell's language switch reaches the document too, but only for a language this
     document actually has - a meeting minuted only in English stays English. */
- if(d.mmt==='lang'&&d.lang&&document.querySelector('.sheet[data-l='+d.lang+']'))setLang(d.lang);});
+ if(d.mmt==='lang'&&d.lang&&document.querySelector('.sheet[data-l='+d.lang+']')){setLang(d.lang);mkDraw();}
+ if(d.mmt==='marks'){MK=d.list||[];mkDraw();}});
 if(window.parent!==window){addEventListener('DOMContentLoaded',function(){
  var b=document.getElementById('thm');if(b)b.hidden=true;});}
 function flipTheme(){setTheme(document.documentElement.dataset.theme==='light'?'dark':'light');}
@@ -411,6 +433,126 @@ function copytxt(btn,sel){
  var o=btn.dataset.o||btn.textContent;btn.dataset.o=o;
  btn.textContent=ok?'\u5df2\u590d\u5236':'\u5931\u8d25';
  setTimeout(()=>btn.textContent=o,1800);}
+/* ---- marks on the paper --------------------------------------------------------
+   A reader drags across a sentence that is wrong and says why in one line. The paper
+   owns the selection and the yellow underline; saving and rewriting are HTTP, so they
+   belong to the shell. Standalone in a browser tab none of this exists, because there
+   would be nowhere to save to. */
+var MK=[],MKQ='';
+/* NOT vis(): inside the app the paper is built while its column is still hidden, and an
+   element in a hidden panel has no offsetParent, so vis() finds nothing and the marks
+   silently never paint. body.dataset.l is the sheet the reader is on either way. */
+function mkSheet(){var l=document.body.dataset.l;
+ return (l&&document.querySelector('.sheet[data-l='+l+']'))||vis('.sheet')||document.querySelector('.sheet');}
+function mkFile(){var s=mkSheet();return s?(s.dataset.src||'minutes.md'):'';}
+function mkIn(n){for(var p=n;p;p=p.parentNode){if(p.nodeType===1&&p.classList&&p.classList.contains('mkq'))return true;}return false;}
+function mkNodes(root){
+ var out=[],w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+  if(!n.nodeValue)return NodeFilter.FILTER_REJECT;
+  for(var p=n.parentNode;p&&p!==root;p=p.parentNode){
+   var t=(p.tagName||'').toLowerCase();
+   if(t==='button'||t==='script'||t==='style')return NodeFilter.FILTER_REJECT;
+   if(p.classList&&(p.classList.contains('mkui')||p.classList.contains('subj')))return NodeFilter.FILTER_REJECT;}
+  return NodeFilter.FILTER_ACCEPT;}});
+ var n;while((n=w.nextNode()))out.push(n);return out;}
+/* The searchable text plus, per character, where it came from. Whitespace is collapsed
+   the same way the browser collapsed it on screen, which is the form the quote was
+   captured in - that is what lets a mark find its place again after a re-render. */
+function mkIndex(root){
+ var s='',map=[];
+ mkNodes(root).forEach(function(n){var v=n.nodeValue;
+  for(var i=0;i<v.length;i++){var c=v[i];
+   if(/\s/.test(c)){if(!s.length||s[s.length-1]===' ')continue;c=' ';}
+   s+=c;map.push([n,i]);}});
+ return {s:s,map:map};}
+function mkNorm(q){return String(q||'').replace(/\s+/g,' ').trim();}
+function mkSpans(idx,at,len){
+ var out=[],cur=null;
+ for(var i=at;i<at+len;i++){var m=idx.map[i];if(!m)break;
+  if(cur&&cur.n===m[0]&&m[1]>=cur.e){cur.e=m[1]+1;continue;}
+  if(cur)out.push(cur);cur={n:m[0],s:m[1],e:m[1]+1};}
+ if(cur)out.push(cur);return out;}
+function mkWrap(sp,id,n){
+ var t=sp.n,mid=sp.s>0?t.splitText(sp.s):t;
+ if(sp.e-sp.s<mid.nodeValue.length)mid.splitText(sp.e-sp.s);
+ var mk=document.createElement('mark');
+ mk.className='mkq';mk.setAttribute('data-mk',id);
+ if(n)mk.setAttribute('data-n',n);
+ mk.title='\u7b2c '+n+' \u5904\u6807\u6ce8\uff0c\u70b9\u4e00\u4e0b\u53bb\u6389';
+ mk.onclick=function(ev){ev.stopPropagation();mkDrop(id);};
+ mid.parentNode.replaceChild(mk,mid);mk.appendChild(mid);}
+function mkClear(){
+ document.querySelectorAll('mark.mkq').forEach(function(m){
+  var p=m.parentNode;while(m.firstChild)p.insertBefore(m.firstChild,m);
+  p.removeChild(m);p.normalize();});}
+/* One mark at a time, re-indexing each round: wrapping splits text nodes, so an index
+   built before the first mark is wrong by the second. Forty marks on one page is the
+   server's cap and this stays imperceptible well past that. */
+function mkDraw(){
+ mkClear();
+ var sh=mkSheet();if(!sh)return;
+ var f=mkFile(),n=0;
+ MK.forEach(function(m){
+  if((m.file||'minutes.md')!==f)return;
+  n++;
+  var q=mkNorm(m.quote);if(!q)return;
+  var idx=mkIndex(sh),at=idx.s.indexOf(q);
+  if(at<0)return;                       /* the sentence is gone - the rewrite ate it */
+  var sp=mkSpans(idx,at,q.length);
+  if(!sp.length||sp.some(function(x){return mkIn(x.n);}))return;
+  sp.forEach(function(x,i){mkWrap(x,m.id,i?0:n);});});}
+function mkHide(){var c=document.getElementById('mkchip'),b=document.getElementById('mkbox');
+ if(c)c.hidden=true;if(b)b.remove();}
+function mkAt(el,r){
+ var y=r.bottom+(window.scrollY||0)+7,x=r.left+(window.scrollX||0);
+ el.style.top=y+'px';
+ el.style.left=Math.max(6,Math.min(x,(document.documentElement.clientWidth||900)-320))+'px';}
+function mkSel(){
+ var s=window.getSelection();
+ if(!s||s.isCollapsed||document.getElementById('mkbox'))return;
+ var sh=mkSheet();if(!sh){mkHide();return;}
+ var r=s.getRangeAt(0);
+ if(!sh.contains(r.commonAncestorContainer)){mkHide();return;}
+ var q=mkNorm(s.toString());
+ /* a stray click-drag is not a complaint */
+ if(q.length<4){mkHide();return;}
+ MKQ=q;
+ var c=document.getElementById('mkchip');
+ c.hidden=false;mkAt(c,r.getBoundingClientRect());}
+function mkAsk(){
+ var s=window.getSelection(),r=null;
+ try{r=s.getRangeAt(0).getBoundingClientRect();}catch(e){}
+ var c=document.getElementById('mkchip');c.hidden=true;
+ var b=document.createElement('div');b.id='mkbox';b.className='mkui mkbox';
+ b.innerHTML='<div class="q">\u201c'+MKQ.replace(/[&<>]/g,function(x){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[x];})
+  +'\u201d</div><input id="mknote" maxlength="400" placeholder="\u54ea\u91cc\u4e0d\u5bf9\uff1f\u4e00\u53e5\u8bdd\u5c31\u884c\uff08\u53ef\u4ee5\u7a7a\u7740\uff09">'
+  +'<div class="row2"><button onclick="mkHide()">\u53d6\u6d88</button>'
+  +'<button class="pri" onclick="mkSave()">\u6807\u4e0a</button></div>';
+ document.body.appendChild(b);
+ mkAt(b,r||{bottom:60,left:40});
+ var i=document.getElementById('mknote');
+ i.focus();
+ i.onkeydown=function(ev){if(ev.key==='Enter'){ev.preventDefault();mkSave();}
+  else if(ev.key==='Escape'){mkHide();}};}
+function mkSave(){
+ var i=document.getElementById('mknote'),note=i?i.value:'';
+ mkHide();
+ try{parent.postMessage({mmt:'flag',quote:MKQ,note:note,file:mkFile()},'*');}catch(e){}
+ var s=window.getSelection();if(s)s.removeAllRanges();}
+function mkDrop(id){try{parent.postMessage({mmt:'unflag',id:id},'*');}catch(e){}}
+function mkInit(){
+ if(window.parent===window)return;
+ var c=document.createElement('div');
+ c.id='mkchip';c.className='mkui mkchip';c.hidden=true;
+ c.textContent='\u8fd9\u91cc\u6709\u95ee\u9898';
+ c.onmousedown=function(ev){ev.preventDefault();};
+ c.onclick=mkAsk;
+ document.body.appendChild(c);
+ document.addEventListener('mouseup',function(){setTimeout(mkSel,0);});
+ document.addEventListener('keydown',function(ev){if(ev.key==='Escape')mkHide();});
+ document.addEventListener('mousedown',function(ev){
+  if(ev.target.closest&&ev.target.closest('.mkui'))return;
+  mkHide();});}
 document.addEventListener('DOMContentLoaded',()=>{
  setTheme(document.documentElement.dataset.theme||'dark');
  var d=document.body.dataset.def||'en',l=d;
@@ -420,6 +562,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  var pr=false;try{pr=!!localStorage.getItem('mmt.pair');}catch(e){}
  var c=document.getElementById('pairbox');
  if(c){c.checked=pr;pair(pr);}
+ mkInit();
  /* Last, so the shell's reply lands on a page that has stopped changing its own mind. */
  if(window.parent!==window){try{parent.postMessage({mmt:'paper-ready'},'*');}catch(e){}}});
 """
@@ -541,7 +684,7 @@ def _facts_strip(facts) -> str:
             f"<tr>{tds}</tr></table>")
 
 
-def sheet_html(d: dict, lg: str, fallback_title: str) -> str:
+def sheet_html(d: dict, lg: str, fallback_title: str, src: str = "minutes.md") -> str:
     """One language of the pasteable minutes. Everything inside .cz is inline-styled,
     because Outlook discards <style> and a set of minutes that loses its table on paste
     is worse than no minutes."""
@@ -568,7 +711,7 @@ def sheet_html(d: dict, lg: str, fallback_title: str) -> str:
         body.append(f'<p style="{S["p"]}">'
                     + "<br>".join(e(x) for x in str(fm["signoff"]).split("\n")) + "</p>")
     cp = "复制标题" if lg == "zh" else "Copy subject"
-    return (f'<div class="sheet" data-l="{lg}">'
+    return (f'<div class="sheet" data-l="{lg}" data-src="{src}">'
             f'<div class="subj"><span class="lbl">Subject</span>'
             f'<span class="val">{e(subject)}</span>'
             f'<button class="btn g sm" onclick="copytxt(this,\'.sheet .subj .val\')">'
@@ -616,6 +759,8 @@ def main() -> int:
     # minutes.zh.md / minutes.en.md are the other one. Two files rather than one
     # bilingual file, so each is valid Markdown that can be sent as it stands.
     docs: dict[str, dict] = {}
+    # which file each sheet was rendered from; a mark has to be saved back into that file
+    srcof: dict[str, str] = {}
     # An untouched scaffold is rebuilt rather than kept, so its header follows the facts
     # as they are now: the attendee list is ticked on the confirm desk AFTER the first
     # scaffold is written, and a header naming the wrong people is worse than no header.
@@ -637,13 +782,16 @@ def main() -> int:
         if fp.exists():
             d = M.load(fp)
             key = forced or (d["meta"].get("lang") or "en")
-            docs.setdefault(key, d)
+            if key not in docs:
+                docs[key] = d
+                srcof[key] = fn
             if fn == "minutes.md":
                 primary = key
     scaffolded = False
     if not docs:
         (ses / "minutes.md").write_text(M.scaffold(ses, tr, meta, args.me), encoding="utf-8")
         docs["en"] = M.load(ses / "minutes.md")
+        srcof["en"] = "minutes.md"
         primary = "en"
         scaffolded = True
     prime = docs.get(primary) or docs.get("en") or next(iter(docs.values()))
@@ -705,7 +853,8 @@ def main() -> int:
 
     # ------------------------------------------------- part 1: the pasteable sheet
     title = fm.get("title") or tr.get("title") or ses.name
-    sheets = "".join(sheet_html(docs[lg], lg, title) for lg in ("en", "zh") if lg in docs)
+    sheets = "".join(sheet_html(docs[lg], lg, title, srcof.get(lg, "minutes.md"))
+                     for lg in ("en", "zh") if lg in docs)
     sheet = sheets
 
     # -------------------------------------------------------- part 2: verbatim

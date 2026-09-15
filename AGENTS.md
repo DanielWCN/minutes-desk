@@ -136,6 +136,8 @@ Rules for what you put in it:
   is their decision and the app asks in place.
 - Do not set `api_ack` to true. That flag records that a human understood a transcript
   would leave the machine.
+- Do not set `cli_ack` to true either. Same flag, one step closer: it records that a human
+  agreed the transcript may go to the assistant program named in `assistants.json`.
 - Do not configure `api_base` / `api_key`. The default engine sends nothing anywhere: it
   hands the user a prompt to paste into whichever assistant they already use.
 - Do not put anything in the program directory. Everything the user accumulates lives in
