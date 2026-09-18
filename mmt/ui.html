@@ -970,6 +970,10 @@ body.zen .col.ses{display:none}
 body.zen .gut{display:none}
 @media (max-width:1399px){.gut.g2{display:none}}
 @media (max-width:920px){.gut{display:none}}
+/* While a border is being dragged nothing else may take the pointer. The minutes are
+   an iframe, and an iframe eats the events the drag is made of. */
+body.gutting{user-select:none;cursor:col-resize}
+body.gutting iframe{pointer-events:none}
 
 /* ---- a meeting can be named, and a name can be changed -------------- */
 .si{position:relative}
@@ -1391,7 +1395,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.3.2';
+const UI_VERSION = '2.3.3';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -3482,7 +3486,13 @@ document.addEventListener('mousedown', e => {
 // A machine that has never been tested gets tested now; after that we replay what was
 // measured, because a test plays a tone and nobody wants that mid-meeting.
 /* The split between the columns belongs to whoever is reading, so both borders drag
-   and the result is remembered. Double click restores the width the layout was drawn at. */
+   and the result is remembered. Double click restores the width the layout was drawn at.
+
+   Press and drag, like every other splitter in the world. That takes pointer capture: the
+   right column is an iframe, and the moment the pointer crosses into it the parent window
+   stops being told about the move AND about the release. Without capture the border then
+   goes on following a mouse whose button is no longer down, which reads as "click to arm,
+   move, click to drop" - a mode nobody asked for. */
 function gutInit(){
   [['#gut1', '--w-ses', 'mmt.wses', 150, 460, 1],
    ['#gut2', '--w-doc', 'mmt.wdoc', 300, 1000, -1]].forEach(([sel, vr, key, lo, hi, dir]) => {
@@ -3494,21 +3504,27 @@ function gutInit(){
       if (v >= lo && v <= hi) document.documentElement.style.setProperty(vr, v + 'px'); }
     catch (e){}
     el.addEventListener('pointerdown', ev => {
+      if (ev.button !== 0) return;             // left button only; the others mean menus
       ev.preventDefault();
       el.classList.add('on');
-      document.body.style.userSelect = 'none';
+      document.body.classList.add('gutting');
       const x0 = ev.clientX, w0 = now();
+      // capture, so the iframe on the right cannot swallow the move or the release
+      try { el.setPointerCapture(ev.pointerId); } catch (e){}
       const mv = e => document.documentElement.style.setProperty(vr,
         Math.min(hi, Math.max(lo, w0 + dir * (e.clientX - x0))) + 'px');
       const up = () => {
         el.classList.remove('on');
-        document.body.style.userSelect = '';
-        document.removeEventListener('pointermove', mv);
-        document.removeEventListener('pointerup', up);
+        document.body.classList.remove('gutting');
+        ['pointermove', 'pointerup', 'pointercancel', 'lostpointercapture']
+          .forEach(t => el.removeEventListener(t, t === 'pointermove' ? mv : up));
+        try { el.releasePointerCapture(ev.pointerId); } catch (e){}
         try { localStorage.setItem(key, now()); } catch (e){}
       };
-      document.addEventListener('pointermove', mv);
-      document.addEventListener('pointerup', up);
+      el.addEventListener('pointermove', mv);
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+      el.addEventListener('lostpointercapture', up);
     });
     el.addEventListener('dblclick', () => {
       document.documentElement.style.removeProperty(vr);

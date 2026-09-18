@@ -12,6 +12,24 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.3.3
+
+- **The border between the columns drags, instead of arming itself.** Press the left button
+  and pull; let go and it stops. What it did before was worse and not on purpose: the drag
+  took no pointer capture, and the right-hand column is an iframe, so the moment the pointer
+  crossed into the minutes the parent window stopped hearing both the movement and the
+  release. The border then kept following a mouse whose button was already up, which reads
+  as "click to arm, move, click to drop". It now captures the pointer, and nothing else on
+  the page can take it mid-drag. A right-click on the border no longer starts anything.
+- Double click still puts a column back to the width the layout was drawn at.
+
+- **两列之间那条边现在是按住拖，不是点一下就跟着走。** 按下左键拖，松手就停。之前那个行为不是
+  设计，是缺陷：拖动没有抓住指针，而右边那一列是个 iframe，指针一进到纪要里，外层窗口就同时
+  收不到移动、也收不到松手 —— 于是这条边继续跟着一只已经松开的鼠标走，用起来就像「点一下选中、
+  移动、再点一下放下」。现在拖动全程独占指针，页面上别的东西抢不走。在这条边上点右键不再触发
+  任何动作。
+- 双击仍然把这一列恢复成排版时的宽度。
+
 ## v2.3.2
 
 - **A sentence you typed yourself now reaches the other sheet too.** v2.3.1 carried a word
