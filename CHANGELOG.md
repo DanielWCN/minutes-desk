@@ -12,6 +12,59 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.5
+
+Three words from a real meeting, answered - and two of the three turned out to be defects
+rather than vocabulary.
+
+- **A contraction was being offered as a mis-hearing of a product name.** The transcript of a
+  real meeting read `I couldn't [CloudFront?] catch, what is the plan`. The phonetic pass
+  strips apostrophes before comparing, which is right for sound, but it also hid the word from
+  the guard that throws out ordinary English: `couldn't` measures 5.09 on the zipf frequency
+  scale and would have been dropped on sight, while the `couldnt` left after stripping measures
+  3.43 and sailed through. `shouldn't` is 4.82 against 3.18, and every other contraction is the
+  same shape. The guard now reads both forms and believes the commoner one.
+- **Teaching the tool one more spelling of a term it already knew threw the rest away.** This
+  machine's glossary merges on top of the shipped one key by key, and in `fix_after` a key
+  holds the whole list of heard forms for that term. Adding one form of a term the shipped
+  layer already covers replaced its list instead of extending it - one new variant of
+  `headcount` would have silently dropped the other six, including both of the Chinese
+  mis-hearings. Lists are merged now; a string still wins outright.
+- **A login is not a name.** Pasting an invite's `To:` line is the fastest way to get the
+  attendees in, but the page kept whatever sits before the `@`, which for some people is their
+  name and for others is eight letters. It now looks the address up in the alias table the
+  installer builds from the local calendar and puts the person's full name on the chip. An
+  address written `first.last` is capitalised; an opaque login is left exactly as it is rather
+  than dressed up as a surname. Your own address now drops out of the attendee list by name,
+  where before it survived as a login and you appeared as a guest at your own meeting.
+- Two terms went into this machine's private glossary as a result. Nothing in the shipped
+  glossary changed.
+
+Measured on the 26-minute meeting the three words came from: the confirm desk went from two
+questions to none, both words now come out right on their own, and nothing else in the
+transcript moved.
+
+真实会议里挑出来的三个词，答完了 —— 其中两个根本不是词表问题，是代码的毛病。
+
+- **一个英文缩略形式被当成产品名听错了。** 真实会议的逐字稿里写着
+  `I couldn't [CloudFront?] catch, what is the plan`。发音比对之前会先去掉撇号，这对比声音是
+  对的，但它同时也把这个词从「常见英文词就别猜了」那道闸门后面藏了起来：`couldn't` 的词频是
+  5.09，本来一眼就该被扔掉；去掉撇号剩下的 `couldnt` 只有 3.43，于是顺顺当当过了闸。
+  `shouldn't` 是 4.82 对 3.18，其他缩略形式全是一个样。现在两种写法都量，信更常见的那个。
+- **给一个它本来就认识的词多教一种写法，会把原来的写法全丢掉。** 本机词表是按键覆盖在随程序
+  发布的那份上面的，而 `fix_after` 里一个键存的是这个词的全部听错形式。给一个随程序发布的词
+  加一种新写法，等于把它原来那张清单整个换掉 —— 给 `headcount` 加一条，会悄悄丢掉另外六条，
+  包括两个中文误听。现在清单是合并的；值是字符串时仍然直接覆盖。
+- **登录名不是名字。** 把会议邀请的 `To:` 行粘进来是把与会人一次填齐最快的办法，但页面留下的
+  是 `@` 前面那一截，这对有些人是姓名，对有些人就是八个字母。现在它会去查安装时从本机日历建起
+  来的别名表，把这个人的全名写到名牌上。写成 `first.last` 的地址会自动首字母大写；看不出名字的
+  登录名就原样留着，不装成一个姓。你自己的地址现在会按名字从与会人里被剔掉，以前它以登录名的
+  形态活了下来，于是你以客人的身份出现在自己的会议里。
+- 顺带有两个词进了本机的私有词表。随程序发布的那份词表没有任何改动。
+
+在这三个词出处的那场 26 分钟会议上实测：待确认台从两个问题变成零个，两个词现在自己就出对了，
+逐字稿里别的地方一个字没动。
+
 ## v2.4.4
 
 Captions were measured against a real Slack huddle for the first time, instead of against a

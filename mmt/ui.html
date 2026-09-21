@@ -1401,7 +1401,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.4.4';
+const UI_VERSION = '2.4.5';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -1932,6 +1932,16 @@ async function saveCfg(){
 const NOISE = /^(required|optional|attendees?|organizer|from|to|cc|收件人|抄送|与会者|必需|可选|主持人)\s*[:：]?$/i;
 const ROOM = /conf\s*room|meeting\s*room|会议室|\bboard\s*room\b/i;
 
+/* A login is not a name. Where the glossary knows whose it is, that person's full name
+   is the answer and none of the guessing below applies to it. */
+function byAlias(s){
+  const p = (S && S.people) || {};
+  const k = (s || '').trim().toLowerCase();
+  if (!k || !/^[a-z0-9][a-z0-9._-]*$/.test(k)) return '';
+  const hit = p[k];
+  return (typeof hit === 'string' && hit.trim()) ? hit.trim() : '';
+}
+
 function oneName(s){
   s = (s || '').replace(/["']/g, ' ').trim();
   const m = s.match(/<([^>]*)>/);              // Alex Smith <alex@example.com>
@@ -1941,9 +1951,14 @@ function oneName(s){
   }
   s = s.trim().replace(/[;,\s]+$/, '').trim();
   if (!s || NOISE.test(s) || ROOM.test(s)) return '';
+  const known = byAlias(s.split('@')[0]);
+  if (known) return known;
   if (/@/.test(s)){
     if (/chime|zoom|webex|teams|pin\+|resource|room/i.test(s)) return '';
     s = s.split('@')[0].replace(/[._]+/g, ' ').trim();       // alias only
+    /* first.last is a name written in lower case; one opaque token is a login, and
+       capitalising it would only dress it up as a surname. */
+    if (/ /.test(s) && s === s.toLowerCase()) s = s.replace(/\b[a-z]/g, c => c.toUpperCase());
   }
   if (/^[a-z0-9][a-z0-9._-]*$/.test(s) && !/\s/.test(s) && s.length > 3
       && /(directs|team|managers|group|all|list)$/i.test(s)) return '';

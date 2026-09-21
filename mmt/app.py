@@ -33,6 +33,7 @@ import archive
 import config
 import diarize
 import doctor
+import lexicon
 import llm
 import minutes as M
 import outlook
@@ -47,7 +48,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.4"
+VERSION = "2.4.5"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -65,6 +66,10 @@ _jobs: dict[str, dict] = {}
 _rec: dict = {"proc": None, "session": None, "control": None, "status": None, "asr": None,
               "asr_session": None, "cap": None, "cap_session": None, "ended_at": None}
 _doc_cache: dict = {"at": 0.0, "data": None}
+
+# alias -> display name, for the page. Read from disk only when the file has actually
+# changed, because /api/state is polled while a meeting is running.
+_people_cache: dict = {"sig": None, "data": {}}
 
 
 # ------------------------------------------------------------------------------------ jobs
@@ -146,6 +151,29 @@ def list_sessions(cfg: dict) -> list[dict]:
             "mb": round(sum(f["mb"] for f in files), 1),
         })
     return out
+
+
+def _people() -> dict:
+    """The alias table, for the page.
+
+    A login is not a name. Pasting an invite's To: line hands the page addresses, and
+    the part before the @ is whatever the mail system calls the person, which for some
+    people is their full name and for others is eight letters. The glossary already
+    knows whose login is whose, so the page can put the full name on the chip instead.
+    """
+    try:
+        f = lexicon.user_path()
+        st = f.stat() if f.exists() else None
+        sig = (st.st_mtime_ns, st.st_size) if st else None
+        if sig != _people_cache["sig"]:
+            ppl = lexicon.merged().get("people") or {}
+            _people_cache.update(
+                sig=sig,
+                data={str(k).lower(): v for k, v in ppl.items()
+                      if isinstance(v, str) and v.strip() and not str(k).startswith("_")})
+        return _people_cache["data"]
+    except Exception:                                        # noqa: BLE001
+        return {}                                            # a name is a nicety, not a meeting
 
 
 def _jload(p: Path, default: dict | None = None) -> dict:
@@ -542,6 +570,7 @@ class H(BaseHTTPRequestHandler):
                         "sessions": list_sessions(cfg),
                         "recording": self._rec_status(),
                         "jobs": list(_jobs.values())[-6:],
+                        "people": _people(),
                         "onedrive": config.suggested_archive()})
         elif path == "/doc/sop":
             p = HERE / "profiles" / "sop.md"

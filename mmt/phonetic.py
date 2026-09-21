@@ -186,7 +186,13 @@ def annotate(text: str, vocab, seen: set[str] | None = None):
                 continue
             if n in known:                       # already a canonical term, leave alone
                 continue
-            zipf = _zipf(n) if size == 1 else 0.0
+            # An apostrophe is not a sound, so _norm drops it - but that also hides a
+            # contraction from the frequency guard below. "couldn't" measures 5.09 and is
+            # thrown out as an ordinary word; the "couldnt" left after normalising measures
+            # 3.43 and gets offered as a mis-hearing of a product name. Same for shouldn't
+            # (4.82 vs 3.18) and every other contraction. Read both forms, believe the
+            # commoner one.
+            zipf = max(_zipf(n), _zipf(surface.strip().lower())) if size == 1 else 0.0
             mn = metaphone(n)
             floor = MRATIO_MIN if size == 1 else MRATIO_MIN_MULTI
             rfloor = RATIO_MIN if size == 1 else RATIO_MIN_MULTI

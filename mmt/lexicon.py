@@ -77,11 +77,22 @@ def merged() -> dict:
                     acc.append(w)
         out[k] = acc
     for k in DICT_TABLES:
-        acc = {}
+        acc: dict = {}
         for layer in (base, user):
             v = layer.get(k)
-            if isinstance(v, dict):
-                acc.update(v)
+            if not isinstance(v, dict):
+                continue
+            for key, val in v.items():
+                # fix_after keeps a list of heard forms per canonical spelling, so teaching
+                # the tool one more form for a term base already knows must ADD to that
+                # list. Replacing it silently threw away everything base knew about the
+                # term - one new variant for "headcount" would have dropped the other six.
+                if isinstance(val, list) and isinstance(acc.get(key), list):
+                    have = {str(x).lower() for x in acc[key]}
+                    acc[key] = acc[key] + [x for x in val
+                                           if isinstance(x, str) and x.lower() not in have]
+                else:
+                    acc[key] = val
         out[k] = acc
     return out
 
