@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.3.3"
+VERSION = "2.3.4"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -381,6 +381,28 @@ def _draft_step(cfg: dict, d: Path) -> list:
         except OSError:
             return []
     return [["?", PY, "-u", str(HERE / "llm.py"), str(d), "--draft", "--no-report"]]
+
+
+def _doc_steps(cfg: dict, d: Path, bld: list, rpt: list, rebuilt: bool = False) -> list:
+    """The order these steps have to run in, which is not the order they read in.
+
+    whois.py reads transcript.json, and llm.py --draft reads minutes.md -- and both of those
+    files are written by LATER steps of this same chain: build.py writes the transcript,
+    report.py scaffolds the minutes. On a fresh recording neither exists yet, so naming and
+    drafting failed on every first press and only worked on a second one. That is what turns
+    a first transcript into "Speaker 1 .. Speaker 18" beside an all-TBD scaffold. Building
+    and rendering once up front costs a few seconds and makes one press enough; a session
+    that already has those files pays nothing.
+    """
+    steps = ([bld] if rebuilt or not (d / "transcript.json").exists() else []) \
+        + _speaker_steps(cfg, d) + [bld]
+    draft = _draft_step(cfg, d)
+    if draft and not (d / "minutes.md").exists():
+        steps.append(rpt)                  # writes the scaffold the draft then fills in
+    steps += draft
+    steps += _translate_step(cfg, d)
+    steps.append(rpt)
+    return steps
 
 
 def _translate_step(cfg: dict, d: Path) -> list:
@@ -827,17 +849,13 @@ class H(BaseHTTPRequestHandler):
         bld = [PY, "-u", str(HERE / "build.py"), str(d)]
         if others:
             bld += ["--others", others]
-        # who said what has to be settled BEFORE build.py, the step that writes the
-        # labels into the transcript
-        steps = [asr_argv] + _speaker_steps(cfg, d) + [bld]
-        # A model that is already configured should not need a second click. The draft runs
-        # inside the chain, before the document is rendered, so one press turns a recording
-        # into minutes. It is a soft step: no network, no key, no local server, still a
-        # transcript and still a document.
-        steps += _draft_step(cfg, d)
-        steps += _translate_step(cfg, d)
-        steps.append([PY, "-u", str(HERE / "report.py"), str(d)]
-                     + (["--me", cfg["me"]] if cfg.get("me") else []))
+        rpt = [PY, "-u", str(HERE / "report.py"), str(d)] \
+            + (["--me", cfg["me"]] if cfg.get("me") else [])
+        # who said what has to be settled BEFORE the build that writes the labels into the
+        # transcript, and a model that is already configured should not need a second click:
+        # one press turns a recording into named minutes. Both are soft steps -- no network,
+        # no key, no local server, still a transcript and still a document.
+        steps = [asr_argv] + _doc_steps(cfg, d, bld, rpt, bool(b.get("retranscribe")))
         return start_job(f"处理 {name}", [PY, "-u", str(HERE / "_chain.py"),
                                         json.dumps(steps, ensure_ascii=False)])
 
@@ -1283,11 +1301,9 @@ class H(BaseHTTPRequestHandler):
         bld = [PY, "-u", str(HERE / "build.py"), str(d)]
         if others:
             bld += ["--others", others]
-        steps = _speaker_steps(cfg, d) + [bld]
-        steps += _draft_step(cfg, d)
-        steps += _translate_step(cfg, d)
-        steps.append([PY, "-u", str(HERE / "report.py"), str(d)]
-                     + (["--me", cfg["me"]] if cfg.get("me") else []))
+        rpt = [PY, "-u", str(HERE / "report.py"), str(d)] \
+            + (["--me", cfg["me"]] if cfg.get("me") else [])
+        steps = _doc_steps(cfg, d, bld, rpt)
         return start_job(f"生成文档 {name}", [PY, "-u", str(HERE / "_chain.py"),
                                           json.dumps(steps, ensure_ascii=False)])
 

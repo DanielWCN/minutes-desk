@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -37,6 +38,9 @@ import llm                                                     # noqa: E402
 
 MIN_TALK = 8.0        # a cluster with less than this is a cough, a "Right." or crosstalk
 OVERLAP_OK = 0.6      # same cut as build.apply_speakers: below it, two people are talking
+# what build.apply_speakers leaves on a far-end line it has already split by voice:
+# "Speaker 4", or "Speaker 4?" when the overlap was too weak to be sure
+SPLIT = re.compile(r"^Speaker \d+\??$")
 LINE_CAP = 400        # one line of evidence never needs to be longer than this
 TOTAL_CAP = 200_000   # ~60k tokens of transcript is already far more than any real meeting
 
@@ -85,6 +89,12 @@ def label_lines(ses: Path, fallback: str = "Others") -> tuple[list[dict], dict]:
     Returns the lines and the per-cluster talk time. The overlap rule is deliberately the
     same as apply_speakers(): the evidence the model reads has to be the labelling that
     ends up in the transcript, or it is reasoning about a different document.
+
+    A transcript that has already been through one build carries the cluster on every
+    far-end line and says "Speaker 4" where it used to say "Others". Those still have to
+    count as far-end, or naming reads the whole meeting as the microphone track, tags every
+    line [YOU], and then reports that no cluster was ever addressed by name - which is
+    exactly what it did before this was fixed.
     """
     d = _load(ses / "diarization.json", {}) or {}
     turns = d.get("turns") or []
@@ -97,7 +107,14 @@ def label_lines(ses: Path, fallback: str = "Others") -> tuple[list[dict], dict]:
             continue
         row = {"start": float(s.get("start") or 0.0), "text": text[:LINE_CAP],
                "cluster": None, "sure": True}
-        if (s.get("speaker") or "") != fallback:
+        done = s.get("cluster")
+        if done is not None:
+            row["cluster"] = int(done)
+            row["sure"] = (s.get("speaker_confidence") or "") != "low"
+            out.append(row)
+            continue
+        who = s.get("speaker") or ""
+        if who != fallback and not SPLIT.match(who):
             row["you"] = True
             out.append(row)
             continue

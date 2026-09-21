@@ -12,6 +12,32 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.3.4
+
+- **Speakers get their names on the first press, and so do the minutes.** Two steps of the
+  processing chain read files that later steps of the same chain write: naming reads the
+  transcript that the build produces, and the draft reads the minutes file that the render
+  scaffolds. On a fresh recording neither file existed yet, so both steps failed every time
+  and only worked if you pressed again -- which is why a first transcript came back as
+  "Speaker 1 .. Speaker 18" next to an all-TBD outline. The chain now builds and renders
+  once up front. A session that already has those files pays nothing for it.
+- **Naming can read a transcript that has already been split by voice.** It only recognised
+  the far end while it still carried one label; once the build had turned that label into
+  "Speaker 4", naming read the entire meeting as the microphone track, marked every line as
+  the person recording, and then reported that nobody had been addressed by name all
+  meeting. On a real 26-minute team meeting the same recording goes from 0 of 9 voices named
+  to 7 named and 2 marked as guesses.
+
+- **第一次按下去就有名字，纪要也一起出来。** 处理链里有两步读的是后面步骤才写出来的文件：认人
+  要读逐字稿，而逐字稿是再后面一步才生成的；起草纪要要读纪要文件，而那个文件是最后渲染时才铺出来
+  的。新录的会上这两个文件都还不存在，所以这两步每次都失败，只有再按一次才会成功 —— 这就是为什么
+  第一份逐字稿只有「Speaker 1 到 Speaker 18」，纪要里全是 TBD。现在处理链会先生成一次再往下走，
+  已经有这些文件的会话不会多花时间。
+- **认人现在读得懂已经按声音切过的逐字稿。** 以前它只认得对端还挂着同一个标签的样子；一旦生成
+  步骤把那个标签换成了「Speaker 4」，认人就把整场会当成了麦克风那一路，把每一行都算成录音的人
+  自己，然后得出「全场没有任何人被叫到名字」的结论。同一场 26 分钟的真实周会，9 个声音从 0 个
+  认出来变成 7 个认出来、2 个标为推测。
+
 ## v2.3.3
 
 - **The border between the columns drags, instead of arming itself.** Press the left button
