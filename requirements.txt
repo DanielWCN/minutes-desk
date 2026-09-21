@@ -11,3 +11,4 @@ jellyfish          # metaphone, for the "did it mis-hear this?" pass
 rapidfuzz          # fuzzy variant matching in the glossary
 wordfreq           # tells a rare technical term apart from an ordinary word
 Pillow             # frame thumbnails in the paper
+uiautomation       # reads Zoom's caption panel: where the far end's names come from

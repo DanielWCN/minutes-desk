@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.3.4"
+VERSION = "2.4.0"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -62,7 +62,8 @@ UI = HERE / "ui.html"
 PY = sys.executable
 
 _jobs: dict[str, dict] = {}
-_rec: dict = {"proc": None, "session": None, "control": None, "status": None, "asr": None, "asr_session": None}
+_rec: dict = {"proc": None, "session": None, "control": None, "status": None, "asr": None,
+              "asr_session": None, "cap": None, "cap_session": None, "ended_at": None}
 _doc_cache: dict = {"at": 0.0, "data": None}
 
 
@@ -246,9 +247,13 @@ def _issues(d: Path, tr: dict, n_people: int) -> list[dict]:
     named = _count(spk.get("named")) if spk else 0
     if spk:
         total = _count(spk.get("num_clusters"))
+        cap = _count(spk.get("from_captions"))
         add("speakers", "info",
-            f"与会 {n_people} 人，对端 {total} 个声音已分开，其中 {named} 个认出了名字",
-            "对端是一路混合音频，所以名字不是靠声纹，而是靠会上人们互相怎么称呼推出来的："
+            f"与会 {n_people} 人，对端 {total} 个声音已分开，其中 {named} 个认出了名字"
+            + (f"（{cap} 个来自 Zoom 字幕）" if cap else ""),
+            ("其中 Zoom 字幕给出的名字不是推断：字幕显示名字的时刻，正是那个声音在说话的时刻。"
+             if cap else "")
+            + "对端是一路混合音频，所以名字不是靠声纹，而是靠会上人们互相怎么称呼推出来的："
             "认不出来的留作「Speaker 编号」，只是推测的会标上问号。",
             "建议核查：逐字稿里带问号的行，请对照录音确认一下是谁。"
             if _count(spk.get("guessed")) else "无需处理，仅供备查。")
@@ -368,7 +373,15 @@ def _speaker_steps(cfg: dict, d: Path) -> list:
         if not (diarize.SEG_MODEL.exists() and diarize.EMB_MODEL.exists()):
             return out
         out.append(["?", PY, "-u", str(HERE / "diarize.py"), str(d)])
-    if llm.can_auto(cfg) and (not fresh or not (d / "speakers.json").exists()):
+    # Zoom's own captions, if this meeting had any, are laid over the clusters first: a name
+    # Zoom printed at the moment a voice was talking is not a guess, so whois.py is left with
+    # only the clusters the captions could not settle. It also means naming works with no
+    # model configured at all, which it never could before.
+    caps = (d / "captions.jsonl").exists()
+    if caps and (not fresh or not (d / "captions.match.json").exists()):
+        out.append(["?", PY, "-u", str(HERE / "zmatch.py"), str(d)]
+                   + (["--me", cfg["me"]] if cfg.get("me") else []))
+    if (llm.can_auto(cfg) or caps) and (not fresh or not (d / "speakers.json").exists()):
         out.append(["?", PY, "-u", str(HERE / "whois.py"), str(d)])
     return out
 
@@ -751,7 +764,35 @@ class H(BaseHTTPRequestHandler):
                 pass
         if proc is not None and not alive:
             st["exit_code"] = proc.returncode
+            if not _rec.get("ended_at"):
+                _rec["ended_at"] = time.time()
+            cp = _rec.get("cap")
+            # zcap.py stops itself when session.json appears. This is for the case where the
+            # recorder died without writing one; 15 s first, so a caption still in flight lands.
+            if cp is not None and cp.poll() is None and time.time() - _rec["ended_at"] > 15:
+                try:
+                    cp.terminate()
+                except Exception:                              # noqa: BLE001
+                    pass
+        st["captions"] = self._cap_status()
         return st
+
+    @staticmethod
+    def _cap_status() -> dict:
+        """One line for the recording panel: is Zoom's caption panel being read, and how much."""
+        name, base = _rec.get("cap_session"), _rec.get("status")
+        if not name or not base:
+            return {"on": False}
+        cp = _rec.get("cap")
+        f = Path(base).parent / name / "captions.jsonl"
+        n = 0
+        if f.exists():
+            try:
+                with f.open("r", encoding="utf-8") as fh:
+                    n = sum(1 for line in fh if line.strip())
+            except OSError:
+                n = 0
+        return {"on": cp is not None and cp.poll() is None, "lines": n}
 
     def _start_record(self, cfg: dict, b: dict) -> dict:
         if _rec["proc"] is not None and _rec["proc"].poll() is None:
@@ -791,9 +832,12 @@ class H(BaseHTTPRequestHandler):
         slug = re.sub(r"[\s_]+", "-",
                       "".join(c if c.isalnum() or c in " -_" else "_" for c in title)).strip("-")
         _rec.update(proc=proc, control=str(ctl), status=str(stage / "status.json"),
-                    session=(f"{stamp}_{slug}" if slug else stamp), asr=None, asr_session=None)
+                    session=(f"{stamp}_{slug}" if slug else stamp), asr=None, asr_session=None,
+                    cap=None, cap_session=None, ended_at=None)
         if cfg.get("live_asr", True):
             threading.Thread(target=self._live_asr, args=(cfg, stage), daemon=True).start()
+        if cfg.get("captions", True):
+            threading.Thread(target=self._captions, args=(cfg, stage), daemon=True).start()
         return {"ok": True, "session": _rec["session"], "video": bool(b.get("video", cfg.get("video")))}
 
     @staticmethod
@@ -828,6 +872,47 @@ class H(BaseHTTPRequestHandler):
         except Exception:                                      # noqa: BLE001
             return
         _rec.update(asr=proc, asr_session=name)
+
+    @staticmethod
+    def _captions(cfg: dict, stage: Path) -> None:
+        """
+        Read Zoom's caption panel while the meeting runs, if it happens to be open.
+
+        This is where the far end's NAMES come from. Everything else in the tool has to work
+        the names out afterwards - from how people address each other - because the loopback
+        track is one mixed stream. Zoom is the one participant in the room that already knows,
+        because it prints the roster name of whoever is speaking. zmatch.py later lays those
+        names over the voice clusters by time.
+
+        Never mandatory, never in the way: no caption panel and this writes nothing, and a
+        failure here cannot touch the recording, which is a different process.
+        """
+        if importlib.util.find_spec("uiautomation") is None:
+            return
+        sp = stage / "status.json"
+        name = ""
+        for _ in range(120):
+            time.sleep(0.5)
+            try:
+                name = str(json.loads(sp.read_text(encoding="utf-8")).get("session") or "")
+            except Exception:                                  # noqa: BLE001
+                name = ""
+            if name:
+                break
+        ses = stage / name
+        if not name or not ses.is_dir():
+            return
+        try:
+            log = open(ses / "captions.log", "w", encoding="utf-8")                # noqa: SIM115
+            proc = subprocess.Popen([PY, "-u", str(HERE / "zcap.py"), str(ses)],
+                                    cwd=str(HERE),
+                                    env=dict(os.environ, PYTHONIOENCODING="utf-8",
+                                             PYTHONUNBUFFERED="1"),
+                                    stdout=log, stderr=subprocess.STDOUT,
+                                    stdin=subprocess.DEVNULL)
+        except Exception:                                      # noqa: BLE001
+            return
+        _rec.update(cap=proc, cap_session=name)
 
     def _record_cmd(self, cmd: str) -> dict:
         if cmd not in ("stop", "mark", "private", "video"):

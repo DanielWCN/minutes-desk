@@ -12,6 +12,46 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.0
+
+- **The far end's names can now come from Zoom itself.** Everything in the tool that puts a
+  name on a voice has had to work it out afterwards, from how people address each other,
+  because the loopback track arrives as one mixed stream that carries no names. Zoom is the
+  one participant in the room that already knows: with captions on, it prints the roster name
+  of whoever is speaking. While a meeting records, the tool now reads that panel through the
+  Windows accessibility layer -- the same interface a screen reader uses -- and keeps one line
+  per caption with the wall clock beside it. Nothing is captured that Zoom had not already
+  drawn on the screen, no screen recording is involved, and the transcript is still the one
+  this machine recognised: only the names and the times are taken.
+- **The two timelines are lined up by measurement, not by assumption.** A caption carries a
+  wall clock and a voice cluster carries seconds since the recording started, and the gap
+  between them is not a constant you can look up. So every shift in a four-minute range is
+  tried, and the one kept is the shift where each cluster overlaps one name instead of a
+  smear of five. A shift that only wins by a hair wins nothing: the answer is then "the
+  captions do not line up", and naming falls back to reading the conversation as before. On a
+  real 26-minute team meeting, 6 of the 7 voices that could be named at all were settled this
+  way, none of them wrongly.
+- **Naming no longer needs a model at all when captions were running.** A name Zoom printed
+  while a voice was talking is not an inference, so those clusters are not even shown to the
+  model, and what is left is a shorter question. The recording panel says whether the caption
+  panel is being read, and how many lines have come in, while the meeting is still going. The
+  switch is in Settings and is on by default; with no caption panel open it writes nothing.
+
+- **对端的名字现在可以直接来自 Zoom。** 工具里所有给声音配名字的办法，过去都只能事后推断 ——
+  靠会上人们互相怎么称呼，因为系统回环那一路是混在一起的，本身不带名字。而会议里有一个参与者
+  本来就知道答案：Zoom 打开字幕时，屏幕上显示的说话人名字直接来自会议名单。现在录音期间，工具
+  会通过 Windows 的无障碍接口（读屏软件用的就是它）读那个字幕面板，把每一条字幕连同当时的
+  时钟一起记下来。只记 Zoom 已经画在屏幕上的东西，不录屏；逐字稿仍然是本机识别的那一份，
+  从字幕里只取名字和时间。
+- **两条时间轴是量出来对齐的，不是假定的。** 字幕带的是墙上时钟，声音聚类带的是录音开始后的
+  秒数，两者之间的差不是一个能查到的常数。所以程序会在正负两分钟内逐一试，留下让「每个聚类
+  只压到一个名字」而不是「糊成五个」的那个偏移。只赢一点点的偏移不算赢：那时的结论是「字幕
+  和音频对不上」，认人退回到原来读对话的办法。在一场 26 分钟的真实周会上，能认出名字的 7 个
+  声音里有 6 个是这样定下来的，没有一个认错。
+- **开着字幕的会，认人可以完全不用模型。** Zoom 在某个声音说话时打出的名字不是推断，所以这些
+  聚类根本不会拿去问模型，剩下的问题也更短。录音面板上会实时写着字幕有没有在读、读到了多少行。
+  开关在设置里，默认开着；没开字幕面板时它什么也不写。
+
 ## v2.3.4
 
 - **Speakers get their names on the first press, and so do the minutes.** Two steps of the

@@ -62,7 +62,10 @@ PACKAGES = {
 # Optional: with three or more people the loopback track is everyone mixed together, and
 # splitting it back apart is what turns "Others" into names (diarize.py + whois.py). A 1:1
 # needs none of it - there the two tracks already are the two people.
-OPTIONAL_PACKAGES: dict[str, str] = {"sherpa_onnx": "sherpa-onnx"}
+# uiautomation reads Zoom's own caption panel through the Windows accessibility layer,
+# which is where the far end's NAMES come from (zcap.py). Pure Python, a few hundred KB.
+OPTIONAL_PACKAGES: dict[str, str] = {"sherpa_onnx": "sherpa-onnx",
+                                     "uiautomation": "uiautomation"}
 
 MODEL_CACHE_HINT = "large-v3-turbo"
 MODEL_SIZE_MB = 1622
@@ -92,6 +95,10 @@ def defaults() -> dict:
         "mic_device": "",          # "" = Windows default
         "loopback_device": "",     # "" = default output, with auto-follow
         "video": False,
+        # Read Zoom's caption panel while recording, when it happens to be open. It is the
+        # only source in the room that KNOWS who is speaking - the names come off the meeting
+        # roster instead of being worked out afterwards. Text is never taken from it.
+        "captions": True,
         "video_fps": 3,
         "video_crf": 32,
         "video_width": 1280,

@@ -1338,6 +1338,12 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
         同步客户端会全程占用 CPU 与带宽，并可能上传不完整文件。</div>
       <div class="divider"></div>
       <div class="row">
+        <label class="chk"><input type="checkbox" id="c_caps"><span>顺便读 Zoom 字幕里的名字</span>
+          <em>对端是一路混合音频，名字只能靠会上互相的称呼推断；Zoom 的字幕面板开着的时候，
+            名字直接来自会议名单，不必推断。只取名字和时间，文字仍然用本机识别的逐字稿</em></label>
+      </div>
+      <div class="divider"></div>
+      <div class="row">
         <label class="chk"><input type="checkbox" id="c_video"><span>默认录制屏幕</span>
           <em>实测 340 MB/小时，录制整个桌面，包含他人共享的画面</em></label>
       </div>
@@ -1395,7 +1401,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.3.4';
+const UI_VERSION = '2.4.0';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -1899,6 +1905,7 @@ function fillCfg(){
   $('#c_me').value = c.me; $('#c_model').value = c.model;
   $('#c_stage').value = c.staging_dir; $('#c_arch').value = c.archive_dir;
   $('#c_archen').checked = c.archive_enabled; $('#c_video').checked = c.video;
+  $('#c_caps').checked = c.captions !== false;
   $('#c_vfps').value = c.video_fps; $('#c_vcrf').value = c.video_crf;
   $('#c_vw').value = c.video_width;
   if (!$('#r_video').dataset.touched) $('#r_video').checked = c.video;
@@ -1912,6 +1919,7 @@ async function saveCfg(){
     me:$('#c_me').value.trim(), model:$('#c_model').value,
     staging_dir:$('#c_stage').value.trim(), archive_dir:$('#c_arch').value.trim(),
     archive_enabled:$('#c_archen').checked, video:$('#c_video').checked,
+    captions:$('#c_caps').checked,
     video_fps:+$('#c_vfps').value||3, video_crf:+$('#c_vcrf').value||32,
     video_width:+$('#c_vw').value||1280, setup_done:true});
   S.config = r.config; drawChecks(r.doctor); fillCfg();
@@ -2077,6 +2085,14 @@ async function pollRec(){
 }
 
 const TRACK = {mic:'本端语音（麦克风）', loopback:'对端语音（系统回环）'};
+/* Whether Zoom's caption panel is being read, said plainly, because when it IS being read
+   the far end gets real names instead of "Speaker 7" - and that is worth seeing live. */
+function capTxt(st){
+  const c = st.captions || {};
+  if (c.on) return '正在读 · ' + (c.lines || 0) + ' 行';
+  if (c.lines) return '已停 · ' + c.lines + ' 行';
+  return '没读到 · Zoom 的字幕面板开着吗';
+}
 function drawRec(st){
   if (!st || !S) return;
   if (st.session) cur = st.session;
@@ -2096,7 +2112,8 @@ function drawRec(st){
   bm.textContent = (st.bookmarks || 0) + ' 个书签';
   $('#l_meta').innerHTML = kvrow('会议', $('#r_title').value || '未命名')
     + (att.length ? kvrow('与会', att.join('、')) : '')
-    + kvrow('目录', st.session || '');
+    + kvrow('目录', st.session || '')
+    + kvrow('Zoom 字幕', capTxt(st));
 
   const box = $('#l_mtrs'); box.innerHTML = '';
   Object.entries(st.tracks || {}).forEach(([k, v]) => {

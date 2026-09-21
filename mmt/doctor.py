@@ -12,6 +12,7 @@ Every check returns the same shape so the UI can render them without special cas
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import shutil
 import sys
 import threading
@@ -71,11 +72,17 @@ def check_packages() -> dict:
             present.append(mod)
         except Exception:                                     # noqa: BLE001
             missing.append(pkg)
+    # Optional ones are checked WITHOUT importing them. Importing uiautomation initialises
+    # COM in this thread, and soundcard has already initialised it the other way round in the
+    # server process - which is why an installed uiautomation used to report itself missing
+    # here. Both optional modules are only ever used inside their own subprocess.
     opt_missing = []
     for mod, pkg in config.OPTIONAL_PACKAGES.items():
         try:
-            importlib.import_module(mod)
+            found = importlib.util.find_spec(mod) is not None
         except Exception:                                     # noqa: BLE001
+            found = False
+        if not found:
             opt_missing.append(pkg)
     if missing:
         return _row("packages", "依赖组件", "fail",
@@ -83,8 +90,9 @@ def check_packages() -> dict:
                     {"action": "install", "label": "一键安装", "packages": missing})
     if opt_missing:
         return _row("packages", "依赖组件", "warn",
-                    f"{len(present)}/{len(config.PACKAGES)} 必需组件已安装；可选的说话人分离缺少 "
-                    + ", ".join(opt_missing) + "（1:1 会议不需要）",
+                    f"{len(present)}/{len(config.PACKAGES)} 必需组件已安装；可选组件缺少 "
+                    + ", ".join(opt_missing)
+                    + "（sherpa-onnx 分说话人，1:1 会议不需要；uiautomation 读 Zoom 字幕）",
                     {"action": "install", "label": "装上可选项", "packages": opt_missing})
     return _row("packages", "依赖组件", "ok", f"{len(present)}/{len(config.PACKAGES)} 已安装")
 

@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import llm                                                     # noqa: E402
+import zmatch                                                  # noqa: E402
 
 MIN_TALK = 8.0        # a cluster with less than this is a cough, a "Right." or crosstalk
 OVERLAP_OK = 0.6      # same cut as build.apply_speakers: below it, two people are talking
@@ -205,23 +206,50 @@ def decide(ses: Path, cfg: dict, min_talk: float = MIN_TALK,
         return {"ok": False, "error": f"没有说话超过 {min_talk:.0f} 秒的声音，不值得判断"}
     if not ev["people"]:
         return {"ok": False, "error": "参会名单是空的，先在确认台把与会人勾上"}
+    # What Zoom's own captions already settled. These are not inference: Zoom printed a roster
+    # name while that voice was talking, so they outrank anything the model works out below,
+    # and the clusters they cover are not even shown to it.
+    cap = {}
+    for cid, who in zmatch.sure_names(ses).items():
+        if cid in set(ev["ask"]):
+            cap[cid] = match_name(who, ev["people"]) or who
+    ask = [c for c in ev["ask"] if c not in cap]
     t0 = time.time()
-    try:
-        if (cfg.get("engine") or "assistant") == "assistant":
-            if not llm.can_auto(cfg):
-                return {"ok": False,
-                        "error": "当前引擎要手工粘贴，说话人判断只在能自动调用时做"}
-            raw = llm.chat_cli(ev["one"], timeout=timeout, cwd=str(ses))
-        else:
-            raw = llm.chat(cfg, ev["system"], ev["user"], timeout=min(timeout, 600.0))
-    except Exception as exc:                                   # noqa: BLE001
-        return {"ok": False, "error": str(exc)[:800]}
-    got = parse(raw)
-    if not got:
-        return {"ok": False, "error": "模型没给出可解析的 JSON", "raw": raw[:600]}
+    got: dict = {}
+    raw = ""
+    if ask:
+        try:
+            if (cfg.get("engine") or "assistant") == "assistant":
+                if not llm.can_auto(cfg):
+                    if not cap:
+                        return {"ok": False,
+                                "error": "当前引擎要手工粘贴，说话人判断只在能自动调用时做"}
+                    raw = ""                                   # captions carry it on their own
+                else:
+                    raw = llm.chat_cli(ev["one"], timeout=timeout, cwd=str(ses))
+            else:
+                raw = llm.chat(cfg, ev["system"], ev["user"], timeout=min(timeout, 600.0))
+        except Exception as exc:                               # noqa: BLE001
+            if not cap:
+                return {"ok": False, "error": str(exc)[:800]}
+            raw = ""
+        if raw:
+            got = parse(raw)
+            if not got and not cap:
+                return {"ok": False, "error": "模型没给出可解析的 JSON",
+                        "raw": raw[:600]}
 
-    clusters, named, guessed = {}, 0, 0
+    clusters, named, guessed, from_cap = {}, 0, 0, 0
     for cid in ev["ask"]:
+        if cid in cap:
+            clusters[str(cid)] = {
+                "speaker": cap[cid], "confidence": "high", "cluster": int(cid),
+                "talk_time_s": round(talk[cid], 1), "guess": cap[cid], "from": "caption",
+                "why": "Zoom 字幕在这个时间显示的就是这个名字",
+            }
+            named += 1
+            from_cap += 1
+            continue
         g = got.get(str(cid)) or got.get(cid) or {}
         raw_name = (g.get("name") or "").strip() if isinstance(g, dict) else ""
         why = (g.get("why") or "").strip() if isinstance(g, dict) else ""
@@ -245,14 +273,18 @@ def decide(ses: Path, cfg: dict, min_talk: float = MIN_TALK,
         clusters[str(cid)] = row
 
     minor = {c: s for c, s in talk.items() if s < min_talk}
+    caps = zmatch.load(ses)
     out = {
         "track": "others.wav",
         "min_talk_s": min_talk,
+        "from_captions": from_cap,
+        "captions": ({"lines": caps.get("lines"), "offset_s": caps.get("offset_s"),
+                      "sure": caps.get("sure")} if caps else None),
         "num_clusters": len(clusters),
         "named": named, "guessed": guessed,
         "unknown": len(clusters) - named - guessed,
         "minor": {"count": len(minor), "talk_time_s": round(sum(minor.values()), 1)},
-        "engine": cfg.get("engine") or "assistant",
+        "engine": ("caption" if from_cap and not got else cfg.get("engine") or "assistant"),
         "took_s": round(time.time() - t0, 1),
         "clusters": clusters,
         "note": ("名字来自会上互相的称呼，不是声纹比对：声音只决定哪些话是同一个人说的。"

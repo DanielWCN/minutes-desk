@@ -41,6 +41,8 @@
     [/^展开上下文 $/, 'Show context '],
     [/^（共 (\d+) 处）$/, '($1 more)'],
     [/^(\d+) 个书签$/, '$1 bookmarks'],
+    [/^正在读 · (\d+) 行$/, 'reading · $1 lines'],
+    [/^已停 · (\d+) 行$/, 'stopped · $1 lines'],
     [/^第 (\d+) 段$/, 'Segment $1'],
     [/^已确认 (.+)$/, 'Confirmed $1'],
     [/^已归档 (.+)$/, 'Archived $1'],
@@ -73,6 +75,9 @@
     '重命名失败': 'Rename failed',
     '会议准备': 'Getting ready',
     '本场会议': 'This meeting',
+    'Zoom 字幕': 'Zoom captions',
+    '没读到 · Zoom 的字幕面板开着吗': 'nothing read - is the caption panel open?',
+    '顺便读 Zoom 字幕里的名字': 'Take the names from Zoom captions too',
     '返回会议': 'Back to the meeting',
 
     /* ---- session states ---- */
