@@ -43,6 +43,8 @@
     [/^(\d+) 个书签$/, '$1 bookmarks'],
     [/^正在读 · (\d+) 行$/, 'reading · $1 lines'],
     [/^已停 · (\d+) 行$/, 'stopped · $1 lines'],
+    [/^读到 (\d+) 段文字 · 但没解析出名字$/,
+     '$1 pieces of text read · but no speaker on them'],
     [/^第 (\d+) 段$/, 'Segment $1'],
     [/^已确认 (.+)$/, 'Confirmed $1'],
     [/^已归档 (.+)$/, 'Archived $1'],

@@ -160,8 +160,6 @@ def today(cfg: dict | None = None, days_from: int = 0, days_to: int = 1) -> dict
     return {"ok": True, "meetings": out, "at": now}
 
 
-if __name__ == "__main__":
-    print(json.dumps(today({"me": whoami()}), ensure_ascii=False, indent=1))
 def whoami() -> str:
     """The mailbox owner's display name, straight from the signed-in client.
 
@@ -177,3 +175,7 @@ def whoami() -> str:
         return person(p.stdout.decode("utf-8", "replace").strip()) or ""
     except Exception:                                              # noqa: BLE001
         return ""
+
+
+if __name__ == "__main__":
+    print(json.dumps(today({"me": whoami()}), ensure_ascii=False, indent=1))

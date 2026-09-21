@@ -1401,7 +1401,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.4.1';
+const UI_VERSION = '2.4.2';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2089,8 +2089,12 @@ const TRACK = {mic:'本端语音（麦克风）', loopback:'对端语音（系�
    the far end gets real names instead of "Speaker 7" - and that is worth seeing live. */
 function capTxt(st){
   const c = st.captions || {};
-  if (c.on) return '正在读 · ' + (c.lines || 0) + ' 行';
-  if (c.lines) return '已停 · ' + c.lines + ' 行';
+  const n = c.lines || 0, raw = c.raw || 0;
+  /* raw ahead of named means the panel is being read but no name is on the line. Saying so
+     here is the difference between fixing it during the meeting and finding out after. */
+  if (n === 0 && raw > 0) return '读到 ' + raw + ' 段文字 · 但没解析出名字';
+  if (c.on) return '正在读 · ' + n + ' 行';
+  if (n) return '已停 · ' + n + ' 行';
   return '没读到 · Zoom / Slack 的字幕面板开着吗';
 }
 function drawRec(st){

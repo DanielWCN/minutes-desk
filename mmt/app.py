@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.1"
+VERSION = "2.4.2"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -786,14 +786,26 @@ class H(BaseHTTPRequestHandler):
             return {"on": False}
         cp = _rec.get("cap")
         f = Path(base).parent / name / "captions.jsonl"
-        n = 0
+        # Two counts, because they mean different things to whoever is watching. "named" is
+        # what zmatch.py can actually use. "lines" being ahead of it means the panel is being
+        # read but the speaker is not on the line - which is the one failure worth seeing
+        # while the meeting is still going, instead of discovering it afterwards.
+        n = named = 0
         if f.exists():
             try:
                 with f.open("r", encoding="utf-8") as fh:
-                    n = sum(1 for line in fh if line.strip())
+                    for line in fh:
+                        if not line.strip():
+                            continue
+                        n += 1
+                        try:
+                            if (json.loads(line).get("speaker") or "").strip():
+                                named += 1
+                        except ValueError:
+                            pass
             except OSError:
-                n = 0
-        return {"on": cp is not None and cp.poll() is None, "lines": n}
+                n = named = 0
+        return {"on": cp is not None and cp.poll() is None, "lines": named, "raw": n}
 
     def _start_record(self, cfg: dict, b: dict) -> dict:
         if _rec["proc"] is not None and _rec["proc"].poll() is None:
@@ -864,12 +876,12 @@ class H(BaseHTTPRequestHandler):
         argv = [PY, "-u", str(HERE / "transcribe.py"), str(ses), "--live",
                 "--model", str(cfg.get("model") or "large-v3-turbo")]
         try:
-            log = open(ses / "asr.live.log", "w", encoding="utf-8")            # noqa: SIM115
-            proc = subprocess.Popen(argv, cwd=str(HERE),
-                                    env=dict(os.environ, PYTHONIOENCODING="utf-8",
-                                             PYTHONUNBUFFERED="1"),
-                                    stdout=log, stderr=subprocess.STDOUT,
-                                    stdin=subprocess.DEVNULL)
+            with open(ses / "asr.live.log", "w", encoding="utf-8") as log:
+                proc = subprocess.Popen(argv, cwd=str(HERE),
+                                        env=dict(os.environ, PYTHONIOENCODING="utf-8",
+                                                 PYTHONUNBUFFERED="1"),
+                                        stdout=log, stderr=subprocess.STDOUT,
+                                        stdin=subprocess.DEVNULL)
         except Exception:                                      # noqa: BLE001
             return
         _rec.update(asr=proc, asr_session=name)
@@ -904,13 +916,16 @@ class H(BaseHTTPRequestHandler):
         if not name or not ses.is_dir():
             return
         try:
-            log = open(ses / "captions.log", "w", encoding="utf-8")                # noqa: SIM115
-            proc = subprocess.Popen([PY, "-u", str(HERE / "zcap.py"), str(ses)],
-                                    cwd=str(HERE),
-                                    env=dict(os.environ, PYTHONIOENCODING="utf-8",
-                                             PYTHONUNBUFFERED="1"),
-                                    stdout=log, stderr=subprocess.STDOUT,
-                                    stdin=subprocess.DEVNULL)
+            # closed here on purpose: the child has its own inherited handle, and a copy
+            # left open in the server keeps the file locked, so deleting or archiving that
+            # session folder later fails with a sharing violation.
+            with open(ses / "captions.log", "w", encoding="utf-8") as log:
+                proc = subprocess.Popen([PY, "-u", str(HERE / "zcap.py"), str(ses)],
+                                        cwd=str(HERE),
+                                        env=dict(os.environ, PYTHONIOENCODING="utf-8",
+                                                 PYTHONUNBUFFERED="1"),
+                                        stdout=log, stderr=subprocess.STDOUT,
+                                        stdin=subprocess.DEVNULL)
         except Exception:                                      # noqa: BLE001
             return
         _rec.update(cap=proc, cap_session=name)

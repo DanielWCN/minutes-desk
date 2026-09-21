@@ -60,6 +60,9 @@ MAX_DEPTH = 32        # deeper than any real caption panel; stops runaway walks
 BUDGET = 12000        # nodes per window per scan; a tree this big is not a caption panel
 MIN_TEXT = 2          # a one-character node is a decoration, not speech
 FULL_EVERY = 25.0     # even when locked on, glance over the whole window this often
+STALE = 90.0          # this long without a heartbeat from the recorder and it is gone
+LOCK_HITS = 3         # changes into speech-shaped text before a node counts as the panel
+LOCK_WINDOW = 30.0    # ...and they all have to land inside this long, or they do not count
 APP_EXE = {"zoom.exe": "zoom", "zoommeeting.exe": "zoom", "slack.exe": "slack"}
 # Zoom's home window (the calendar and contacts shell) and its toasts are not where captions
 # live, and reading them would drop the titles of the day's meetings into the session folder
@@ -199,7 +202,7 @@ def scan_text(root, depth: int = 0, limit: int = MAX_DEPTH, hint=None,
         tag = ""
     if hint is None and HINT.search(tag):
         hint = root
-    if t in TEXTY and len(name.strip()) >= MIN_TEXT:
+    if depth and t in TEXTY and len(name.strip()) >= MIN_TEXT:
         try:
             r = root.BoundingRectangle
             key = f"{t}@{r.left},{r.top}"
@@ -236,7 +239,7 @@ class Reader:
         self.panel_t = 0.0
         self.full_t = 0.0
         self.last: dict[str, str] = {}
-        self.hits: dict[str, int] = {}
+        self.hits: dict[str, list[float]] = {}
         self.cand: dict[str, object] = {}
         self.locked_by = ""
         self.lock_key = ""
@@ -251,33 +254,53 @@ class Reader:
         return self._wins
 
     def _lock(self, rows: list[dict]) -> None:
-        """A container that says it holds captions wins outright. Otherwise the one whose
-        text keeps changing into something speech-shaped, and only after it has done so
-        three times - a clock or an agenda line changes too, just far more slowly."""
+        """A container that says it holds captions wins outright. Otherwise the one whose text
+        keeps turning into something speech-shaped.
+
+        What counts as speech-shaped here is narrower than elsewhere in this file: the text has
+        to carry a speaker, "Alice Chen: ..." or "Alice Chen 16:41:02 ...". Merely being long
+        was not enough to tell a caption panel from an idle client. Measured on a Slack window
+        with no captions anywhere in it, a status line redrawing itself while a file uploaded
+        locked the reader on within thirty seconds, and it stayed locked. A speaker on the line
+        is the one thing a caption panel has that ordinary window furniture does not.
+
+        The count also has to be recent rather than merely reached, because a node that changes
+        twice an hour will get there eventually. Captions redraw every couple of seconds.
+        """
         for r in rows:
             if r["hint"] is not None:
                 if self.locked_by != "name":
                     self.panel, self.locked_by, self.lock_key = r["hint"], "name", r["key"]
                     self.panel_t = time.time()
                 return
+        now = time.time()
         for r in rows:
             prev = self.last.get(r["key"])
-            if prev is not None and prev != r["name"] and _speechy(r["name"]):
-                self.hits[r["key"]] = self.hits.get(r["key"], 0) + 1
+            if prev is not None and prev != r["name"] and split(r["name"])[0]:
+                self.hits.setdefault(r["key"], []).append(now)
                 self.cand[r["key"]] = r["parent"]
+        for k in list(self.hits):
+            self.hits[k] = [t for t in self.hits[k] if now - t <= LOCK_WINDOW]
+            if not self.hits[k]:
+                del self.hits[k]
+                self.cand.pop(k, None)
         if not self.hits:
             return
-        best = max(self.hits, key=lambda k: self.hits[k])
-        if (self.hits[best] >= 3 and best != self.lock_key
-                and self.hits[best] >= self.hits.get(self.lock_key, 0) + 2):
+        n = {k: len(v) for k, v in self.hits.items()}
+        best = max(n, key=lambda k: n[k])
+        if (n[best] >= LOCK_HITS and best != self.lock_key
+                and n[best] >= n.get(self.lock_key, 0) + 2):
             self.panel, self.locked_by, self.lock_key = self.cand[best], "change", best
-            self.panel_t = time.time()
+            self.panel_t = now
 
     def texts(self) -> list[dict]:
         now = time.time()
         due = now - self.full_t > FULL_EVERY                    # look around again now and then
         if self.panel is not None and not due:
-            rows = scan_text(self.panel)
+            # hint=panel: inside a panel we have already locked onto, SKIP_SUB must not fire.
+            # It exists to keep a full-window walk out of the message list, and a panel found
+            # by watching text change is an ordinary container that could match it by accident.
+            rows = scan_text(self.panel, hint=self.panel)
             if rows:
                 self.panel_t = now
                 self.last.update({r["key"]: r["name"] for r in rows})
@@ -290,9 +313,14 @@ class Reader:
             try:
                 if w.BoundingRectangle.width() <= 0:            # minimised: nothing to read
                     continue
+                title = " ".join((w.Name or "").split())
             except Exception:
                 continue
-            scan_text(w, out=rows)
+            got: list[dict] = []
+            scan_text(w, out=got)
+            # Chromium repeats the window title on its document node, so the tab caption was
+            # arriving as a line of speech every time a channel changed. It is a title bar.
+            rows += [r for r in got if " ".join(r["name"].split()) != title]
         self.full_t = time.time()
         self._lock(rows)
         self.last = {r["key"]: r["name"] for r in rows}
@@ -300,7 +328,7 @@ class Reader:
 
 
 def read_texts(pid: int | None = None, every: bool = False) -> list[dict]:
-    """Every readable piece of text in Zoom's windows right now. One shot, for --probe."""
+    """Every readable piece of text in the clients' windows now. One shot, for --probe."""
     return Reader(pid, every).texts()
 
 
@@ -325,12 +353,24 @@ class Follower:
 
     def __init__(self, out: Path):
         self.out = out
+        # Set by the loop from Reader.panel. A line with nobody named on it is no use to
+        # zmatch.py, so before the panel is found it is dropped: that is when a long piece of
+        # ordinary window text - a status message, a pinned notice - would otherwise be filed
+        # as speech. Once locked on, everything inside the panel is speech and is kept.
+        self.locked = False
         self.pending: dict[str, dict] = {}                      # node key -> growing line
         self.seen: set[tuple[str, str]] = set()
         self.recent: list[tuple[str, str]] = []
         self.n = 0
 
     def _emit(self, rec: dict) -> None:
+        # A window holds plenty of text that is not speech: tab labels, a channel name, a
+        # button. With no caption panel open at all, an idle Slack window was writing eleven
+        # such lines an hour, which is noise in the file and, worse, a line count on the
+        # recording panel that looked like captions were arriving. A line survives only if
+        # someone is named on it, or if it is long enough to be a sentence.
+        if not rec["speaker"] and not (self.locked and _speechy(rec["raw"])):
+            return
         sig = (rec["speaker"], rec["text"])
         if sig in self.seen:
             return
@@ -403,6 +443,26 @@ def probe(pid: int | None = None, every: bool = False) -> dict:
     }
 
 
+def _gone(sp: Path, name: str, t_start: float) -> bool:
+    """True when there is no recorder left to be a sidecar to.
+
+    A polite stop writes session.json and the loop below sees it. But a recorder that was
+    killed, or a server window that was closed, writes nothing - and then this process would
+    keep walking the accessibility tree for the rest of the day, burning a core to write
+    captions for a meeting that ended. The recorder rewrites status.json every 0.5s, so a
+    stale one means it is gone. A status.json naming a different session means a new recording
+    started, which is the same conclusion reached sooner.
+    """
+    try:
+        mtime = sp.stat().st_mtime
+        cur = str(json.loads(sp.read_text(encoding="utf-8")).get("session") or "")
+    except Exception:                          # noqa: BLE001
+        return time.time() - t_start > STALE   # no heartbeat ever showed up
+    if cur and cur != name:
+        return True
+    return time.time() - mtime > STALE
+
+
 def follow(ses: Path, seconds: float | None, pid: int | None = None,
            feed: Path | None = None, every: bool = False) -> int:
     out = ses / "captions.jsonl"
@@ -414,14 +474,16 @@ def follow(ses: Path, seconds: float | None, pid: int | None = None,
                                ensure_ascii=False, indent=1), encoding="utf-8")
     quiet = 0
     if feed:
+        f.locked = True                        # the file is the panel, by definition
         for i, line in enumerate(feed.read_text(encoding="utf-8").splitlines()):
             f.offer("feed", line, t_start + i * 0.5)
             f.settle(t_start + i * 0.5)
         f.close(t_start + 999)
         print(f"{f.n} 行字幕 -> {out.name}")
         return 0
-    print(f"跟着 Zoom 字幕记（{POLL}s 一次），Ctrl-C 停")
+    print(f"跟着会议字幕记（{POLL}s 一次），Ctrl-C 停")
     done = ses / "session.json"        # written when the recording stops; our cue to stop too
+    beat = ses.parent / "status.json"  # rewritten every 0.5s while the recorder lives
     rd = Reader(pid, every)
     said_panel = False
     try:
@@ -432,11 +494,15 @@ def follow(ses: Path, seconds: float | None, pid: int | None = None,
             if done.exists():
                 print("录音结束了，字幕也停")
                 break
+            if _gone(beat, ses.name, t_start):
+                print("录音那边没动静了，字幕也停")
+                break
             try:
                 rows = rd.texts()
             except Exception as e:
                 rows = []
                 print("读窗口失败：" + str(e)[:120])
+            f.locked = rd.panel is not None
             for r in rows:
                 f.offer(r["key"], r["name"], now)
             if rd.panel is not None and not said_panel:
@@ -445,7 +511,7 @@ def follow(ses: Path, seconds: float | None, pid: int | None = None,
             f.settle(now)
             quiet = quiet + 1 if not rows else 0
             if quiet in (20, 100):
-                print("还没看到任何字幕文字：Zoom 的字幕面板开着吗？窗口是不是最小化了？")
+                print("还没看到任何字幕文字：Zoom / Slack 的字幕面板开着吗？窗口是不是最小化了？")
             time.sleep(POLL)
     except KeyboardInterrupt:
         pass
@@ -455,7 +521,7 @@ def follow(ses: Path, seconds: float | None, pid: int | None = None,
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Zoom 字幕 -> 谁在什么时候说话")
+    ap = argparse.ArgumentParser(description="会议字幕 -> 谁在什么时候说话")
     ap.add_argument("session", nargs="?", help="session folder")
     ap.add_argument("--probe", action="store_true", help="one look, print JSON, exit")
     ap.add_argument("--tree", action="store_true", help="dump the accessibility tree")

@@ -29,6 +29,7 @@ except Exception:                                            # noqa: BLE001
     lexicon = None
 
 SR = 16000
+STALE = 90.0      # no heartbeat from the recorder for this long and it is not coming back
 TRACKS = ("others.wav", "mic.wav")
 MIN_CHUNK_S = 300.0     # don't bother transcribing less than this while live
 TAIL_SEARCH_S = 25.0    # look for a silent cut point in this much of the tail
@@ -277,7 +278,29 @@ def main() -> int:
     print(f"model loaded in {time.time()-t0:.1f}s")
 
     done_marker = ses / "session.json"
-    session_done = (lambda: done_marker.exists()) if args.live else (lambda: True)
+    heartbeat = ses.parent / "status.json"
+
+    def live_done() -> bool:
+        """The recording is over - politely, or because the recorder is gone.
+
+        session.json is the polite ending. But a recorder that was killed, or a server window
+        that was closed, never writes one, and then this process would keep tailing a WAV that
+        stopped growing and reloading the model's context forever, at a real cost in CPU. The
+        recorder rewrites status.json twice a second, so a stale one means there is nothing left
+        to wait for. STALE is generous on purpose: finishing early would truncate a transcript,
+        which is far worse than running 90 seconds too long.
+        """
+        if done_marker.exists():
+            return True
+        try:
+            if time.time() - heartbeat.stat().st_mtime > STALE:
+                print(f"  录音那边 {STALE:.0f}s 没有动静了，按结束处理")
+                return True
+        except OSError:
+            pass
+        return False
+
+    session_done = live_done if args.live else (lambda: True)
 
     report = []
     for name in TRACKS:

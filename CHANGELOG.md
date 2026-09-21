@@ -12,6 +12,68 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.2
+
+A review of the whole caption path, and of what it touches. Seven things were wrong; all
+seven are fixed, and each is checked by something that can be re-run.
+
+- **The caption reader used to lock onto the wrong thing.** It decided it had found the panel
+  by watching which piece of text kept changing into something long. Measured on a Slack window
+  with no captions open anywhere in it, a status line redrawing itself while a file uploaded
+  was enough: within thirty seconds the reader announced it had found the caption panel, and
+  then filed window furniture as speech. Now the changing text has to carry a speaker on it,
+  and the changes have to land inside half a minute of each other. Same window, same thirty
+  seconds: nothing locks on, nothing is written. A real panel still locks on and still captures
+  every line.
+- **It also had no way to stop.** It ended when the recording wrote the file that says it
+  finished. If the recorder was killed, or the window that launched it was closed, nothing ever
+  wrote that file and the reader kept walking the accessibility tree for the rest of the day,
+  burning a core for a meeting that ended hours ago. It now watches the recorder's heartbeat,
+  which is rewritten twice a second, and stops 90 seconds after it goes quiet - or at once if a
+  new recording has started.
+- **A caption count that meant nothing.** An idle client wrote eleven lines of menu labels and
+  notices in half a minute, so the panel showed captions arriving when none were. Those lines
+  are gone, and the number on the panel now counts lines that actually name somebody. When text
+  is being read but no name is on it, the panel says exactly that instead of showing a total
+  that looks healthy.
+- **`outlook.py` could not be run on its own.** Its `whoami()` had ended up below the block
+  that calls it, so the file crashed with a NameError the moment it was executed directly. It
+  worked when imported, which is why nothing else noticed. The rest of the codebase was scanned
+  for the same mistake: this was the only one.
+- **Two file handles leaked per recording.** The server opened a log for each of the two
+  sidecars and never closed its copy, so on Windows the file stayed locked and deleting or
+  archiving that session folder afterwards could fail with a sharing violation.
+- **A window title is not a caption.** Chromium repeats the window title on its document node,
+  so switching channel during a meeting filed the tab caption as a line of speech.
+- **Live transcription could not stop either, and it costs far more.** It waited for the same
+  file, so a killed recorder left it tailing a WAV that had stopped growing and re-running the
+  speech model on it indefinitely. It now watches the same heartbeat. On a dead recorder it
+  finishes in 18 seconds instead of never; 90 seconds of grace first, because ending early
+  would truncate a transcript and that is the worse mistake.
+
+- **字幕面板原来会认错地方。** 它靠「哪段文字一直在变成更长的句子」来判断自己找到了面板。在一个
+  完全没开字幕的 Slack 窗口上实测：一个文件上传时不断刷新的状态行就够了 —— 三十秒内它就宣布
+  「找到字幕面板了」，然后把界面文字当成说话记下来。现在变化的那段文字必须带着说话人的名字，
+  而且几次变化要落在半分钟之内。同一个窗口、同样三十秒：不锁定、不写入。真的字幕面板照样锁得上，
+  每一行照样抓得到。
+- **它原来也不知道该什么时候停。** 它只在录音写下「我结束了」那个文件时结束。如果录音进程被杀掉，
+  或者启动它的窗口被关掉，那个文件永远不会出现，它就会一整天继续遍历无障碍树，为一场几小时前就
+  结束的会议烧着一个核。现在它盯录音那边每半秒刷新一次的心跳，心跳停了 90 秒就退出 —— 如果已经
+  开始了新的录音，立刻退出。
+- **一个没有意义的字幕计数。** 空闲的客户端半分钟就能写进十一行菜单标签和提示，于是面板上显示
+  「字幕正在进来」，其实一条都没有。这些行没有了；面板上的数字现在只数真正带名字的行。当它读到了
+  文字但上面没有名字时，面板会直接这么说，而不是给一个看起来很健康的总数。
+- **`outlook.py` 没法单独运行。** 它的 `whoami()` 不知什么时候跑到了调用它的那段代码下面，于是
+  直接执行这个文件就会 NameError。被 import 的时候是好的，所以一直没人发现。整个代码库扫过一遍
+  同类问题：只有这一处。
+- **每次录音漏两个文件句柄。** 服务端为两个旁路进程各开一个日志文件，自己那份从来没关，于是在
+  Windows 上文件一直被占着，事后删除或归档那个会议文件夹可能会因为共享冲突失败。
+- **窗口标题不是字幕。** Chromium 会把窗口标题重复挂在它的 document 节点上，于是开会时切一下频道，
+  标签页标题就被当成一句话记了下来。
+- **边录边转写也停不下来，而它贵得多。** 它等的是同一个文件，所以录音进程被杀掉之后，它会一直
+  盯着一个已经不再增长的 WAV，反复在上面跑语音模型。现在它盯同一个心跳。录音已死的情况下，
+  它 18 秒就结束，而不是永远不结束；先宽限 90 秒，因为提前结束会把逐字稿截断，那是更严重的错误。
+
 ## v2.4.1
 
 - **Slack huddles are read the same way Zoom is.** Captions were only ever a Zoom feature
