@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.0"
+VERSION = "2.4.1"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -250,8 +250,8 @@ def _issues(d: Path, tr: dict, n_people: int) -> list[dict]:
         cap = _count(spk.get("from_captions"))
         add("speakers", "info",
             f"与会 {n_people} 人，对端 {total} 个声音已分开，其中 {named} 个认出了名字"
-            + (f"（{cap} 个来自 Zoom 字幕）" if cap else ""),
-            ("其中 Zoom 字幕给出的名字不是推断：字幕显示名字的时刻，正是那个声音在说话的时刻。"
+            + (f"（{cap} 个来自会议字幕）" if cap else ""),
+            ("其中会议字幕给出的名字不是推断：字幕显示名字的时刻，正是那个声音在说话的时刻。"
              if cap else "")
             + "对端是一路混合音频，所以名字不是靠声纹，而是靠会上人们互相怎么称呼推出来的："
             "认不出来的留作「Speaker 编号」，只是推测的会标上问号。",
@@ -373,8 +373,9 @@ def _speaker_steps(cfg: dict, d: Path) -> list:
         if not (diarize.SEG_MODEL.exists() and diarize.EMB_MODEL.exists()):
             return out
         out.append(["?", PY, "-u", str(HERE / "diarize.py"), str(d)])
-    # Zoom's own captions, if this meeting had any, are laid over the clusters first: a name
-    # Zoom printed at the moment a voice was talking is not a guess, so whois.py is left with
+    # The client's own captions, if this meeting had any, are laid over the clusters first: a
+    # name Zoom or Slack printed at the moment a voice was talking is not a guess, so whois.py
+    # is left with
     # only the clusters the captions could not settle. It also means naming works with no
     # model configured at all, which it never could before.
     caps = (d / "captions.jsonl").exists()
@@ -779,7 +780,7 @@ class H(BaseHTTPRequestHandler):
 
     @staticmethod
     def _cap_status() -> dict:
-        """One line for the recording panel: is Zoom's caption panel being read, and how much."""
+        """One line for the recording panel: is a caption panel being read, and how much."""
         name, base = _rec.get("cap_session"), _rec.get("status")
         if not name or not base:
             return {"on": False}
@@ -876,11 +877,11 @@ class H(BaseHTTPRequestHandler):
     @staticmethod
     def _captions(cfg: dict, stage: Path) -> None:
         """
-        Read Zoom's caption panel while the meeting runs, if it happens to be open.
+        Read the meeting client's caption panel while the meeting runs, if it is open.
 
         This is where the far end's NAMES come from. Everything else in the tool has to work
         the names out afterwards - from how people address each other - because the loopback
-        track is one mixed stream. Zoom is the one participant in the room that already knows,
+        track is one mixed stream. The client is the one participant that already knows,
         because it prints the roster name of whoever is speaking. zmatch.py later lays those
         names over the voice clusters by time.
 

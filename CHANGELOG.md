@@ -12,6 +12,34 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.1
+
+- **Slack huddles are read the same way Zoom is.** Captions were only ever a Zoom feature
+  here, which was an accident of where the first window happened to be. Nothing in the reader
+  was actually Zoom-specific except a process name and how deep it looked, so both are now a
+  table. One thing did have to change: Zoom draws its panel with native controls about six
+  levels down, while Slack is a Chromium app whose captions are DOM nodes about twenty-five
+  levels down. Measured on a real Slack window, the old depth limit of 20 reached 15 pieces of
+  text and saw nothing that mattered; 32 reaches 132.
+- **A Slack window is the whole client, not just the call.** The message list, the sidebar and
+  the thread pane are all readable text with nothing to do with speech, and feeding a wall of
+  chat to something looking for a caption panel is how it locks onto the wrong thing. The walk
+  now stops at their doorstep, from classes read off a real window rather than guessed. That
+  also made it six times cheaper: 0.10s a scan instead of 0.62s.
+- The panel row, the setting and the note on the confirm desk no longer say "Zoom" when the
+  names came from Slack.
+
+- **Slack 的 huddle 现在和 Zoom 一样能读。** 之前字幕这件事只对 Zoom 生效，纯粹是因为最早拿来
+  试的窗口是 Zoom。其实读取这一段里跟 Zoom 有关的只有两处：进程名，和往下看多深。现在这两处都
+  变成了一张表。真正需要改的是深度：Zoom 用原生控件画字幕面板，大约在第六层；Slack 是 Chromium
+  应用，字幕是 DOM 节点，大约在第二十五层。在真实的 Slack 窗口上实测，原来 20 层只能看到 15 段
+  文字，什么有用的都没有；32 层能看到 132 段。
+- **Slack 的窗口是整个客户端，不只是通话。** 消息列表、侧栏、话题面板全都是能读到的文字，却跟
+  说话没有关系；把一墙聊天记录喂给一个正在找字幕面板的程序，它就会认错地方。现在遍历走到这些
+  区域门口就停，用的是从真实窗口上读出来的类名，不是猜的。顺带快了六倍：一次扫描 0.10 秒，
+  之前是 0.62 秒。
+- 名字来自 Slack 的时候，录音面板那一行、设置里的开关、确认台上的说明，都不再写「Zoom」。
+
 ## v2.4.0
 
 - **The far end's names can now come from Zoom itself.** Everything in the tool that puts a

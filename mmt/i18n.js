@@ -75,9 +75,9 @@
     '重命名失败': 'Rename failed',
     '会议准备': 'Getting ready',
     '本场会议': 'This meeting',
-    'Zoom 字幕': 'Zoom captions',
-    '没读到 · Zoom 的字幕面板开着吗': 'nothing read - is the caption panel open?',
-    '顺便读 Zoom 字幕里的名字': 'Take the names from Zoom captions too',
+    '会议字幕': 'Meeting captions',
+    '没读到 · Zoom / Slack 的字幕面板开着吗': 'nothing read - is the caption panel open?',
+    '顺便读会议字幕里的名字': 'Take the names from the meeting captions too',
     '返回会议': 'Back to the meeting',
 
     /* ---- session states ---- */

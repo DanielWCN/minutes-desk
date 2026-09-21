@@ -206,7 +206,8 @@ def decide(ses: Path, cfg: dict, min_talk: float = MIN_TALK,
         return {"ok": False, "error": f"没有说话超过 {min_talk:.0f} 秒的声音，不值得判断"}
     if not ev["people"]:
         return {"ok": False, "error": "参会名单是空的，先在确认台把与会人勾上"}
-    # What Zoom's own captions already settled. These are not inference: Zoom printed a roster
+    # What the meeting client's own captions already settled. These are not inference: Zoom or
+    # Slack printed a roster
     # name while that voice was talking, so they outrank anything the model works out below,
     # and the clusters they cover are not even shown to it.
     cap = {}
@@ -245,7 +246,7 @@ def decide(ses: Path, cfg: dict, min_talk: float = MIN_TALK,
             clusters[str(cid)] = {
                 "speaker": cap[cid], "confidence": "high", "cluster": int(cid),
                 "talk_time_s": round(talk[cid], 1), "guess": cap[cid], "from": "caption",
-                "why": "Zoom 字幕在这个时间显示的就是这个名字",
+                "why": "会议字幕在这个时间显示的就是这个名字",
             }
             named += 1
             from_cap += 1

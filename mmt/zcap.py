@@ -1,31 +1,37 @@
 """
-Zoom's own captions, borrowed as a who-spoke-when timeline.
+The meeting client's own captions, borrowed as a who-spoke-when timeline.
 
 The far end arrives as one mixed loopback track, so diarize.py can split it into voices but
-never knows a name. Zoom already knows every name: when captions are on, the client prints
-"Alice Chen: the upload finished" on screen, because the name comes from the meeting
-roster, not from guessing. This step reads that panel through the Windows accessibility
-layer - the same interface a screen reader uses - and writes one line per caption with the
-wall clock beside it.
+never knows a name. The client already knows every name: when captions are on, Zoom and Slack
+both print "Alice Chen: the upload finished" on screen, because the name comes from the
+meeting roster, not from guessing. This step reads that panel through the Windows
+accessibility layer - the same interface a screen reader uses - and writes one line per
+caption with the wall clock beside it.
+
+Zoom and Slack are read the same way, and nothing here is specific to either beyond the
+process name and how deep the panel sits. Measured on a real window of each: Zoom's native
+panel is about six levels down and costs 0.5 to 1.1s a scan, Slack's is a Chromium DOM about
+twenty-five levels down and costs 0.62s. Whichever one has captions open is the one that
+answers; if both do, both are read.
 
 What it is for, and what it is NOT for:
 
-  * The transcript stays ours. Zoom's caption text is short, unpunctuated and drops words;
-    large-v3-turbo is better. Nothing here replaces a single word of the transcript.
-  * The names are Zoom's. A caption that says a name at 16:41:02 pins whichever diarization
-    cluster was speaking at 16:41:02 to that person, with none of the guesswork whois.py
-    has to do. Overlap in time is the only thing we take.
+  * The transcript stays ours. A client's caption text is short, unpunctuated and drops
+    words; large-v3-turbo is better. Nothing here replaces a single word of the transcript.
+  * The names are the client's. A caption that says a name at 16:41:02 pins whichever
+    diarization cluster was speaking at 16:41:02 to that person, with none of the guesswork
+    whois.py has to do. Overlap in time is the only thing we take.
 
-Nothing is sent anywhere and nothing is recorded but text that Zoom had already drawn on
+Nothing is sent anywhere and nothing is recorded but text the client had already drawn on
 the screen. No screen capture, no video, no voiceprint.
 
-Requirements: the caption or transcript panel must be open, and the Zoom window must not be
-minimised - a minimised window has no accessibility tree to read. If captions are off, this
-step writes nothing and says so; it never interferes with the recording.
+Requirements: the caption or transcript panel must be open, and the meeting window must not
+be minimised - a minimised window has no accessibility tree to read. If captions are off,
+this step writes nothing and says so; it never interferes with the recording.
 
 Usage:
-    zcap.py --probe                 is Zoom there, can its captions be read? prints JSON
-    zcap.py --tree [--out F]        dump the accessibility tree of every Zoom window
+    zcap.py --probe                 which clients are there, can their captions be read? JSON
+    zcap.py --tree [--out F]        dump the accessibility tree of every meeting window
     zcap.py --tree --pid 1234       dump one process's windows instead (for testing)
     zcap.py <session>               follow the captions, append captions.jsonl
     zcap.py <session> --for 60      stop after 60 seconds
@@ -45,16 +51,29 @@ HERE = Path(__file__).resolve().parent
 
 POLL = 0.8            # seconds between reads; captions redraw about twice a second
 SETTLE = 2.0          # a line that has not changed for this long is finished
-MAX_DEPTH = 20        # deeper than any real caption panel; stops runaway walks
-BUDGET = 3000         # nodes per window per scan; a tree this big is not a caption panel
+# Zoom draws its panel with native controls, which sit about six levels down. Slack is a
+# Chromium app and its captions are DOM nodes about twenty-five levels down, so a limit that
+# was generous for Zoom saw almost nothing in Slack: measured on a real Slack window, depth 20
+# reached 15 text nodes and depth 32 reached 132, for 0.62s instead of 0.15s. The budget rises
+# with it, because a Slack window legitimately holds more nodes than a Zoom one.
+MAX_DEPTH = 32        # deeper than any real caption panel; stops runaway walks
+BUDGET = 12000        # nodes per window per scan; a tree this big is not a caption panel
 MIN_TEXT = 2          # a one-character node is a decoration, not speech
 FULL_EVERY = 25.0     # even when locked on, glance over the whole window this often
-ZOOM_EXE = ("zoom.exe", "zoommeeting.exe")
+APP_EXE = {"zoom.exe": "zoom", "zoommeeting.exe": "zoom", "slack.exe": "slack"}
 # Zoom's home window (the calendar and contacts shell) and its toasts are not where captions
 # live, and reading them would drop the titles of the day's meetings into the session folder
 # for no reason. The caption panel belongs to the meeting window. --all-windows overrides
 # this, which is what to try first if a real caption panel ever turns up unread.
 SKIP_CLS = ("ZPPTMainFrmWndClassEx", "ZPZoomToastNotifierWnd")
+# Slack's window is the whole client, not just the call, so the message list, the sidebar and
+# the thread pane are all readable text that has nothing to do with speech. Walking into them
+# wastes the budget and, worse, gives the lock-on heuristic a wall of chat to mistake for
+# captions. Captions live in the huddle panel, never inside any of these, so the walk stops at
+# their doorstep. Every class here was read off a real Slack window, not guessed.
+SKIP_SUB = re.compile(r"c-message_kit|c-message_list|p-message_pane|p-workspace__message"
+                      r"|channel_sidebar|p-tab_rail|p-top_nav|c-virtual_list"
+                      r"|p-threads_|p-file_|p-search")
 
 # "Alice Chen: the upload finished"  /  "Alice Chen (Host): ..."
 NAMED = re.compile(r"^\s*([^:：]{1,40}?)\s*(?:\((?:Host|主持人|Me|我)\)\s*)?[:：]\s*(.+)$", re.S)
@@ -93,7 +112,7 @@ def _auto():
 
 
 def windows(pid: int | None = None, every: bool = False) -> list:
-    """Top-level windows belonging to Zoom (or to one pid, for testing)."""
+    """Top-level windows belonging to a meeting client (or to one pid, for testing)."""
     auto = _auto()
     out = []
     for w in auto.GetRootControl().GetChildren():
@@ -105,7 +124,7 @@ def windows(pid: int | None = None, every: bool = False) -> list:
             if p == pid:
                 out.append(w)
             continue
-        if _pname(p) not in ZOOM_EXE:
+        if _pname(p) not in APP_EXE:
             continue
         if not every and (getattr(w, "ClassName", "") or "") in SKIP_CLS:
             continue
@@ -174,13 +193,12 @@ def scan_text(root, depth: int = 0, limit: int = MAX_DEPTH, hint=None,
         name = root.Name or ""
     except Exception:
         return out
-    if hint is None:
-        try:
-            tag = (getattr(root, "ClassName", "") or "") + "|" + (getattr(root, "AutomationId", "") or "")
-        except Exception:
-            tag = ""
-        if HINT.search(tag):
-            hint = root
+    try:
+        tag = (getattr(root, "ClassName", "") or "") + "|" + (getattr(root, "AutomationId", "") or "")
+    except Exception:
+        tag = ""
+    if hint is None and HINT.search(tag):
+        hint = root
     if t in TEXTY and len(name.strip()) >= MIN_TEXT:
         try:
             r = root.BoundingRectangle
@@ -190,6 +208,8 @@ def scan_text(root, depth: int = 0, limit: int = MAX_DEPTH, hint=None,
         out.append({"type": t, "name": name[:600], "key": key, "hint": hint, "parent": root})
     if depth >= limit:
         return out
+    if depth and hint is None and SKIP_SUB.search(tag):
+        return out                             # chat, sidebar, threads: text, but not speech
     try:
         kids = root.GetChildren()
     except Exception:
@@ -205,7 +225,7 @@ def _speechy(t: str) -> bool:
 
 
 class Reader:
-    """Reads Zoom's caption text, and gets faster once it has found the panel."""
+    """Reads the client's caption text, and gets faster once it has found the panel."""
 
     def __init__(self, pid: int | None = None, every: bool = False):
         self.pid = pid
@@ -355,13 +375,14 @@ class Follower:
 
 
 def probe(pid: int | None = None, every: bool = False) -> dict:
-    """One look: is Zoom up, is a window readable, does anything look like a caption?"""
+    """One look: is a client up, is a window readable, does anything look like a caption?"""
     t0 = time.time()
     wins = []
     for w in windows(pid, every):
         try:
             r = w.BoundingRectangle
-            wins.append({"cls": getattr(w, "ClassName", ""), "name": (w.Name or "")[:120],
+            wins.append({"app": APP_EXE.get(_pname(w.ProcessId), "?"),
+                         "cls": getattr(w, "ClassName", ""), "name": (w.Name or "")[:120],
                          "w": r.width(), "h": r.height()})
         except Exception:
             pass
@@ -370,7 +391,8 @@ def probe(pid: int | None = None, every: bool = False) -> dict:
     skipped = [(getattr(w, "ClassName", "") or "") for w in windows(pid, True)
                if (getattr(w, "ClassName", "") or "") in SKIP_CLS] if not every else []
     return {
-        "zoom_windows": len(wins),
+        "app_windows": len(wins),
+        "apps": sorted({w["app"] for w in wins}),
         "windows": wins[:12],
         "text_nodes": len(texts),
         "named_lines": len(named),
