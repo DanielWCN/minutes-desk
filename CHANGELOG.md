@@ -27,6 +27,14 @@ generation of the tool on people's machines.
   the person recording, and then reported that nobody had been addressed by name all
   meeting. On a real 26-minute team meeting the same recording goes from 0 of 9 voices named
   to 7 named and 2 marked as guesses.
+- **The notice about the far end no longer says the thing it now does is impossible.** With
+  more than two people in the room the checklist used to state flatly that one mixed audio
+  track cannot be told apart, so the minutes would not say who said what. That stopped being
+  true when voice splitting and naming went in, and a notice claiming a working feature is
+  impossible is worse than no notice: it stops the reader from ever reporting it broken. It
+  now says how many voices were separated and how many got a name, and only asks for a check
+  when something was a guess. It still warns, and asks for another pass, when the far end
+  really has not been split.
 
 - **第一次按下去就有名字，纪要也一起出来。** 处理链里有两步读的是后面步骤才写出来的文件：认人
   要读逐字稿，而逐字稿是再后面一步才生成的；起草纪要要读纪要文件，而那个文件是最后渲染时才铺出来
@@ -37,6 +45,11 @@ generation of the tool on people's machines.
   步骤把那个标签换成了「Speaker 4」，认人就把整场会当成了麦克风那一路，把每一行都算成录音的人
   自己，然后得出「全场没有任何人被叫到名字」的结论。同一场 26 分钟的真实周会，9 个声音从 0 个
   认出来变成 7 个认出来、2 个标为推测。
+- **「其他情况」里那张卡不再说「做不到」。** 会上超过两个人时，那张卡以前直接写「系统声音为一路
+  混合音频，无法区分对端具体发言人，因此纪要不标注某某说」。分轨和认人做进来以后这句话就不成立了，
+  而一张说「这个功能不可能」的提示比没有提示更糟 —— 它会让人永远不去报这个故障。现在它写的是分出了
+  几个声音、其中几个认出了名字，只在有推测项时才请你核对；对端**真的**没分开时仍然是警告，并请你
+  再跑一次 Analysis。
 
 ## v2.3.3
 

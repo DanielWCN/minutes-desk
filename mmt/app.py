@@ -238,12 +238,25 @@ def _issues(d: Path, tr: dict, n_people: int) -> list[dict]:
         add("suspend", "warn", f"录制期间系统休眠 {_count(tr.get('suspend_events'))} 次",
             "对应时段音频缺失，纪要中该时段不会有内容。",
             "建议核查：若缺失时段恰为做出决定的时段，需在纪要中人工补充。")
-    if n_people > 2:
-        add("speakers", "info", f"与会 {n_people} 人，对端仅一路音轨",
-            "系统声音为一路混合音频，无法区分对端具体发言人，"
-            "因此纪要不标注「某某说」，只记录结论与责任人。",
-            "无需处理。这是录制方式决定的，并非内容缺失。"
-            "第 1 组的勾选即纪要的与会人名单。")
+    # This used to say flatly that the far end cannot be told apart, which stopped being
+    # true the day diarization and naming went in -- and a notice that says a working
+    # feature is impossible is worse than no notice, because it stops the reader from ever
+    # reporting that it is broken.
+    spk = _jload(d / "speakers.json")
+    named = _count(spk.get("named")) if spk else 0
+    if spk:
+        total = _count(spk.get("num_clusters"))
+        add("speakers", "info",
+            f"与会 {n_people} 人，对端 {total} 个声音已分开，其中 {named} 个认出了名字",
+            "对端是一路混合音频，所以名字不是靠声纹，而是靠会上人们互相怎么称呼推出来的："
+            "认不出来的留作「Speaker 编号」，只是推测的会标上问号。",
+            "建议核查：逐字稿里带问号的行，请对照录音确认一下是谁。"
+            if _count(spk.get("guessed")) else "无需处理，仅供备查。")
+    elif n_people > 2:
+        add("speakers", "info", f"与会 {n_people} 人，对端还没有按人分开",
+            "系统声音是一路混合音频，需要先按声音分轨再认名字；这一步没有跑成，"
+            "所以逐字稿里对端只有一个标签。",
+            "需处理：再执行一次 Analysis。若仍然如此，说明分轨模型没装好。")
     return out
 
 
