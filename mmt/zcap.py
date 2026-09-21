@@ -74,9 +74,13 @@ SKIP_CLS = ("ZPPTMainFrmWndClassEx", "ZPZoomToastNotifierWnd")
 # wastes the budget and, worse, gives the lock-on heuristic a wall of chat to mistake for
 # captions. Captions live in the huddle panel, never inside any of these, so the walk stops at
 # their doorstep. Every class here was read off a real Slack window, not guessed.
+# Two classes were taken OUT of this list after reading a real huddle: c-virtual_list is
+# the class of the caption list itself, and p-file_drag_drop__container wraps the entire
+# huddle body, so between them they hid the captions completely. The chat message list is
+# still cut, one level lower down, by p-message_pane.
 SKIP_SUB = re.compile(r"c-message_kit|c-message_list|p-message_pane|p-workspace__message"
-                      r"|channel_sidebar|p-tab_rail|p-top_nav|c-virtual_list"
-                      r"|p-threads_|p-file_|p-search")
+                      r"|channel_sidebar|p-tab_rail|p-top_nav"
+                      r"|p-threads_|p-search")
 
 # "Alice Chen: the upload finished"  /  "Alice Chen (Host): ..."
 NAMED = re.compile(r"^\s*([^:：]{1,40}?)\s*(?:\((?:Host|主持人|Me|我)\)\s*)?[:：]\s*(.+)$", re.S)
@@ -168,7 +172,7 @@ def walk(ctrl, depth: int = 0, rows: list | None = None, limit: int = MAX_DEPTH,
     return rows
 
 
-HINT = re.compile(r"caption|subtitle|transcri|closed.?cc|\u5b57\u5e55", re.I)
+HINT = re.compile(r"caption|subtitle|transcri|closed.?cc|\u5b57\u5e55|\u8f6c\u5f55", re.I)
 TEXTY = ("TextControl", "ListItemControl", "DocumentControl", "EditControl", "StaticTextControl")
 # words that sit in front of a colon on screen but are nobody
 STOP = {"note", "warning", "chat", "everyone", "to", "from", "host", "me", "you",
@@ -200,15 +204,27 @@ def scan_text(root, depth: int = 0, limit: int = MAX_DEPTH, hint=None,
         tag = (getattr(root, "ClassName", "") or "") + "|" + (getattr(root, "AutomationId", "") or "")
     except Exception:
         tag = ""
-    if hint is None and HINT.search(tag):
+    # The panel can announce itself in its class, its automation id, or - as Slack does -
+    # only in the label a person reads: the tab panel is called \u5b57\u5e55 and the list inside it
+    # \u8f6c\u5f55, while neither class says anything about captions. Names are trusted on
+    # containers only; a chat message that happens to contain the word would otherwise open
+    # the whole sidebar to the walk.
+    if hint is None and (HINT.search(tag) or (t not in TEXTY and HINT.search(name))):
         hint = root
+    # The panel pins its own notice to the top of the list - "captions are being generated
+    # in English (US)" - which is text inside a caption panel and therefore passes every
+    # other test here. It is furniture, not speech, and it is pinned, so it would be filed
+    # once per meeting with nobody on it.
+    if hint is not None and "--sticky" in tag:
+        return out
     if depth and t in TEXTY and len(name.strip()) >= MIN_TEXT:
         try:
             r = root.BoundingRectangle
             key = f"{t}@{r.left},{r.top}"
         except Exception:
             key = f"{t}{path}"
-        out.append({"type": t, "name": name[:600], "key": key, "hint": hint, "parent": root})
+        out.append({"type": t, "name": name[:600], "key": key, "hint": hint,
+                    "parent": root, "d": depth})
     if depth >= limit:
         return out
     if depth and hint is None and SKIP_SUB.search(tag):
@@ -220,6 +236,43 @@ def scan_text(root, depth: int = 0, limit: int = MAX_DEPTH, hint=None,
     for i, k in enumerate(kids):
         scan_text(k, depth + 1, limit, hint, out, f"{path}/{i}", state)
     return out
+
+
+def pair_items(rows: list[dict]) -> list[dict]:
+    """Glue a caption row back together, and drop the copy of it.
+
+    Slack writes one caption as a list item whose own name is the speaker glued straight
+    onto the sentence - "Alice ChenMorning, everyone. This is Alice speaking." - with no
+    colon, no dash, nothing for split() to find. The two halves are also readable as
+    separate text nodes underneath it, which is where the speaker actually comes from.
+    Measured on a real huddle, not guessed.
+
+    So: where an item's name is exactly its text children joined end to end, rewrite it as
+    "Name: text" and drop those children, which are the same words a second time and would
+    otherwise be filed as a line with nobody on it.
+    """
+    drop: set[int] = set()
+    for i, r in enumerate(rows):
+        if r["type"] != "ListItemControl" or "d" not in r:
+            continue
+        kids = []
+        for j in range(i + 1, len(rows)):
+            if rows[j].get("d", 0) <= r["d"]:
+                break
+            kids.append(j)
+        parts = [" ".join(rows[j]["name"].split())
+                 for j in kids if rows[j]["type"] == "TextControl"]
+        if len(parts) < 2:
+            continue
+        whole = " ".join(r["name"].split())
+        if "".join(parts).replace(" ", "") != whole.replace(" ", ""):
+            continue                           # not a name+sentence pair, leave it alone
+        who, txt = parts[0], " ".join(parts[1:]).strip()
+        if not who or len(who) > 40 or len(who.split()) > 5 or len(txt) < 12:
+            continue
+        r["name"] = f"{who}: {txt}"
+        drop.update(kids)
+    return [r for i, r in enumerate(rows) if i not in drop]
 
 
 def _speechy(t: str) -> bool:
@@ -300,7 +353,7 @@ class Reader:
             # hint=panel: inside a panel we have already locked onto, SKIP_SUB must not fire.
             # It exists to keep a full-window walk out of the message list, and a panel found
             # by watching text change is an ordinary container that could match it by accident.
-            rows = scan_text(self.panel, hint=self.panel)
+            rows = pair_items(scan_text(self.panel, hint=self.panel))
             if rows:
                 self.panel_t = now
                 self.last.update({r["key"]: r["name"] for r in rows})
@@ -318,6 +371,7 @@ class Reader:
                 continue
             got: list[dict] = []
             scan_text(w, out=got)
+            got = pair_items(got)
             # Chromium repeats the window title on its document node, so the tab caption was
             # arriving as a line of speech every time a channel changed. It is a title bar.
             rows += [r for r in got if " ".join(r["name"].split()) != title]
@@ -469,8 +523,15 @@ def follow(ses: Path, seconds: float | None, pid: int | None = None,
     meta = ses / "captions.meta.json"
     f = Follower(out)
     t_start = time.time()
+    # Which client this came from, rather than the name of the first one that was supported.
+    apps: list[str] = []
+    if not feed:
+        try:
+            apps = sorted({APP_EXE.get(_pname(w.ProcessId), "?") for w in windows(pid, every)})
+        except Exception:                      # noqa: BLE001
+            apps = []
     meta.write_text(json.dumps({"t0_wall": t_start, "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                "source": "feed" if feed else "zoom-uia"},
+                                "source": "feed" if feed else "uia", "apps": apps},
                                ensure_ascii=False, indent=1), encoding="utf-8")
     quiet = 0
     if feed:

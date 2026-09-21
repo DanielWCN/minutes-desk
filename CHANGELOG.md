@@ -12,6 +12,62 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.4
+
+Captions were measured against a real Slack huddle for the first time, instead of against a
+window with no captions in it. They were never being read at all, and the reason was in this
+code, not in Slack.
+
+- **Two of the skip rules were hiding the caption panel.** v2.4.1 added a list of Slack
+  container classes the walk should not descend into, read off a real window - but a window
+  with no huddle running. One of them, `c-virtual_list`, turns out to be the class of the
+  caption list itself; another, `p-file_`, matches the container that wraps the entire huddle
+  body. Between them the panel did not exist as far as the reader was concerned. Both are
+  gone. The chat message list is still skipped, one level lower down, at `p-message_pane`.
+- **The panel only says what it is in the label a person reads.** Its class and its automation
+  id say nothing about captions; the tab panel is named 字幕 and the list inside it 转录. The
+  hint that locks the reader on now looks at a container's name as well, which is also what
+  lets it get past a skip rule legitimately. Names are trusted on containers only, so a chat
+  message containing the word cannot open the sidebar to the walk.
+- **A Slack caption row has no colon in it.** The speaker is glued straight onto the sentence -
+  `Alice ChenMorning, everyone. This is Alice speaking.` - so the "Name: text" patterns
+  matched nothing. Both halves are readable as separate text nodes underneath, so a row whose
+  own text is exactly its children joined end to end is now rewritten as `Name: text`, and the
+  children are dropped rather than filed a second time with nobody on them.
+- **The panel's own pinned notice is not speech.** "Captions are being generated in English
+  (US)" sits at the top of the caption list, which made it text inside a caption panel and
+  therefore a line. It is dropped where it is read, before it can be recorded.
+- `captions.meta.json` said `source: zoom-uia` for a Slack huddle. It now records `uia` and
+  which clients were open.
+
+Measured on the real huddle after the fix: the panel is found by name on the first scan, the
+caption rows come out with the right speaker on them, and nothing else in the window does. One
+limit worth knowing: a minimised window reads as nothing at all, so the meeting window can be
+covered by other windows but not minimised.
+
+第一次拿真实的 Slack huddle 测字幕，而不是拿一个没开字幕的窗口测。结论是：字幕从来就没被读到过，
+原因在这份代码里，不在 Slack。
+
+- **两条跳过规则把字幕面板藏起来了。** v2.4.1 加了一份 Slack 容器类名清单，让遍历不要走进去，
+  是照着真窗口写的 —— 但那个窗口没在开 huddle。其中 `c-virtual_list` 恰恰就是字幕列表自己的
+  类名，`p-file_` 又匹配到了包住整个 huddle 主体的那个容器。两条合起来，字幕面板对读取端根本
+  不存在。两条都删了。聊天消息列表仍然跳过，只是位置下移一层，落在 `p-message_pane`。
+- **这个面板只在给人看的标签上写明自己是什么。** 它的类名和 automation id 都不提字幕；标签页
+  叫「字幕」，里面那个列表叫「转录」。现在锁定面板的线索也看容器的名字，这同时也是它能正当地
+  绕过跳过规则的原因。名字只在容器上采信，所以一条含这个词的聊天消息不会把侧栏打开给遍历。
+- **Slack 的字幕行里没有冒号。** 说话人直接粘在句子前面 ——
+  `Alice ChenMorning, everyone. This is Alice speaking.` —— 所以「名字: 内容」那套正则一条
+  都匹配不上。两半在它下面各自是一个可读的文本节点，因此：凡是自身文字恰好等于子节点首尾相接的
+  行，现在会被重写成 `名字: 内容`，子节点直接丢掉，不再以「没有名字的一行」重复记一遍。
+- **面板自己置顶的那条提示不是说话。** 「字幕正在以 English (US) 生成」挂在字幕列表顶端，于是它
+  成了「字幕面板里的文字」，也就成了一行。现在在读到它的地方就丢掉，不给它被记下的机会。
+- `captions.meta.json` 在 Slack huddle 上写的是 `source: zoom-uia`。现在写 `uia`，并记下当时
+  开着哪些客户端。
+
+改完在真 huddle 上实测：第一次扫描就按名字找到面板，字幕行带着正确的说话人出来，窗口里别的东西
+一条都没进去。一个要知道的限制：窗口最小化之后什么都读不到，所以开会的窗口可以被别的窗口挡住，
+但不能最小化。
+
 ## v2.4.3
 
 The four files the caption work never touched (`report.py`, `llm.py`, `build.py`,
