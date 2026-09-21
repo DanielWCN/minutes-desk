@@ -12,6 +12,48 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.3
+
+The four files the caption work never touched (`report.py`, `llm.py`, `build.py`,
+`minutes.py`, about 3,000 lines) put through the same review, on a copy of a real 26-minute
+meeting rather than on `--help`. Two things were wrong, both in what the page told you.
+
+- **The speaker appendix contradicted itself when captions did the naming.** Every row said
+  "the meeting captions showed this name at this time", while the paragraph above them said
+  names come from how people addressed each other and have to match the invite list. The
+  paragraph is now written from the facts: it counts the people the captions named, says how
+  many caption lines were read, and only describes the inference path for whoever is left.
+- **A recording that transcribed nothing looked like a normal short meeting.** No line, no
+  warning, just an empty transcript and "Duration 0 min". That is almost never a silent
+  meeting; it is the loopback device or a muted mic, and the page was the one place you would
+  have found out. There is now a banner that says so, and it stays quiet when the whole
+  meeting was marked private, because there the empty transcript is the point.
+
+Nothing else moved. What the review did check: `build.py` and `report.py` on a real session
+(134 lines, 9 speakers), on a captions-only session, on a mixed one, and on a recording with
+no speech at all; `llm.py --draft`, `--revise` and its mirror into the other language, all
+end to end against the assistant engine; `minutes.py` front matter, sections, blocks and
+scaffolding, plus four malformed inputs. No crash, no leaked handle, no swallowed error that
+should have been raised, no division that can hit zero.
+
+字幕那轮没碰过的四个文件（`report.py`、`llm.py`、`build.py`、`minutes.py`，约 3,000 行）
+补做同样的审查，用的是一场真实 26 分钟会议的副本，不是 `--help`。发现两个问题，都在
+页面对你说的话上。
+
+- **字幕认出名字时，说话人附录自相矛盾。** 每一行都写着「会议字幕在这个时间显示的就是这个
+  名字」，上面那段话却说名字来自会上互相的称呼、还要对得上受邀名单。现在这段话按事实写：
+  数清楚有几个人是字幕直接给的、读到多少行字幕，剩下的人才讲推断那条路。
+- **整场没转写出一句话时，页面看起来就像一场很短的正常会。** 没有提示，只有空的逐字稿和
+  「Duration 0 min」。这几乎不可能是真的没人说话，而是「对方声音」选错了设备或者麦克风被
+  系统静音了，而这一页是你唯一会发现它的地方。现在会有一条明确的提示；如果整场都被标成了
+  私密，则不提示，因为那时逐字稿本来就该是空的。
+
+其他没动。这轮真正测过的：`build.py` 和 `report.py` 跑真实会议（134 行、9 个说话人）、
+纯字幕命名的会、字幕加推断混合的会、以及完全没有语音的录音；`llm.py --draft`、`--revise`
+和它往另一种语言的同步，全部端到端连着 assistant 引擎跑通；`minutes.py` 的前置信息、分节、
+块解析和空白模板，外加四种畸形输入。没有崩溃、没有泄漏的文件句柄、没有该抛却被吞掉的
+错误、没有可能除零的地方。
+
 ## v2.4.2
 
 A review of the whole caption path, and of what it touches. Seven things were wrong; all

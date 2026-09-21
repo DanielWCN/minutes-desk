@@ -815,6 +815,19 @@ def main() -> int:
 
     # ---------------------------------------------------------------- banners
     ban = []
+    # A recording that produced no text at all is almost always a device problem, not a
+    # quiet meeting: the loopback device was not the one the meeting actually played
+    # through, or the mic was muted at the OS level. This page is the only place the
+    # person looks afterwards, and without this line it reads like a normal meeting that
+    # happened to be short. A meeting whose whole length was marked private is excluded:
+    # there the empty transcript is the point.
+    if not lines and not pranges:
+        ban.append(("bad", "&#128266;",
+                    "<div><b>整场没有转写出一句话</b>：录下来的音频里没有可识别的语音。"
+                    "常见原因是「对方声音」选错了设备，或者麦克风在系统里是静音的。"
+                    "设置里的「试录音」能当场测出两路有没有信号。"
+                    "<br><span style=\"opacity:.75\">Nothing was transcribed. Usually the "
+                    "loopback device or the mic was wrong, not a silent meeting.</span></div>"))
     if scaffolded:
         ban.append(("info", "&#9998;",
                     "<div><b>minutes.md 刚刚被创建为空白模板</b>：里面全是 <code>TBD</code>。"
@@ -963,11 +976,26 @@ def main() -> int:
                      f'</td><td>{c.get("talk_time_s", 0):.0f}s</td>'
                      f'<td class="why">{cand}</td>'
                      + (f'<td>{au}</td>' if anyclip else '') + '</tr>')
+        # Where the names came from is not one fixed sentence any more. When the meeting
+        # client was printing captions, the name on a row is not inference at all, and a
+        # blurb that says "from how people addressed each other" contradicts every row
+        # under it. Count the caption-sourced clusters and say what actually happened.
+        ncap = sum(1 for c in spkinfo["clusters"].values() if c.get("from") == "caption")
+        caplines = int((spkinfo.get("captions") or {}).get("lines") or 0)
+        src = '声音只决定哪些话是同一个人说的；'
+        if ncap:
+            src += (f'其中 {ncap} 个人的名字是会议字幕直接写出来的'
+                    + (f'（读到 {caplines} 行字幕）' if caplines else '')
+                    + '，不是推断。')
+            if ncap < len(spkinfo["clusters"]):
+                src += '剩下的靠会上互相的称呼，还要对得上受邀名单，两边都成立才写真名，否则保留 Speaker N。'
+        else:
+            src += ('名字来自会上互相的称呼，还要对得上受邀名单，两边都成立才写真名，'
+                    '否则保留 Speaker N。')
+        src += '声纹算完即弃，没有存到硬盘上。'
         ap_.append(("说话人是怎么认出来的 · Speaker attribution",
                     len(spkinfo["clusters"]),
-                    '<div class="why" style="margin-bottom:10px">声音只决定哪些话是同一个人说的；'
-                    '名字来自会上互相的称呼，还要对得上受邀名单，两边都成立才写真名，否则保留 '
-                    'Speaker N。声纹算完即弃，没有存到硬盘上。</div>'
+                    f'<div class="why" style="margin-bottom:10px">{src}</div>'
                     f'<table class="d"><tr><th>是谁</th><th>时长</th><th>依据</th>'
                     + ('<th>试听</th>' if anyclip else '')
                     + f'</tr>{rows}</table>'))
