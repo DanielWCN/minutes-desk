@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.11"
+VERSION = "2.4.12"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -405,6 +405,13 @@ def _speaker_steps(cfg: dict, d: Path) -> list:
     voices that no longer exist -- so naming always re-runs with it. That is also why
     naming is skipped when speakers.json is already there and the split was not redone:
     it is the one file a person may have corrected by hand.
+
+    One more reason to re-run: the captions were read again but naming never finished
+    afterwards, which is what a crash between the two steps leaves behind. Reading the
+    captions rewrites captions.match.json, so a match newer than speakers.json means the
+    names on disk were decided from an older reading and have to be decided again.
+    Whoever writes speakers.json last wins, which keeps a hand correction safe: editing
+    the file makes it the newer one.
     """
     out: list = []
     wav = d / "others.wav"
@@ -438,8 +445,15 @@ def _speaker_steps(cfg: dict, d: Path) -> list:
             out.append(["?", PY, "-u", str(HERE / "zmatch.py"), str(d)]
                        + (["--me", cfg["me"]] if cfg.get("me") else []))
             redo_names = True
+    spk = d / "speakers.json"
+    stale = False
+    if caps and spk.exists():
+        try:
+            stale = (d / "captions.match.json").stat().st_mtime > spk.stat().st_mtime
+        except OSError:
+            stale = False
     if (llm.can_auto(cfg) or caps) and (not fresh or redo_names
-                                        or not (d / "speakers.json").exists()):
+                                        or not spk.exists() or stale):
         out.append(["?", PY, "-u", str(HERE / "whois.py"), str(d)])
     return out
 

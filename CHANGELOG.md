@@ -12,6 +12,19 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.12
+
+- **Naming could be skipped after it failed.** The step that reads the meeting's own captions
+  and the step that puts names on the voices are two steps, so a crash in between left the
+  captions freshly read and the names still decided from the old reading - and the next press
+  of "generate documents" saw a finished-looking pair of files and skipped straight past both.
+  A set of names older than the reading it came from is now redone. Editing speakers.json by
+  hand still stops it, because that makes the names the newer file.
+
+- **识别失败之后，重按一次也不会再识别。** 读字幕和给声音起名字是两步，中间挂掉的话，字幕是新读的、
+  名字还是按旧读法定的——而下一次按「生成文档」看见两个文件都在，就把两步都跳过去了。现在名字比它依据的
+  那次字幕读取更旧，就会重新定一次。你自己手改过 speakers.json 仍然不会被覆盖，因为手改让它变成更新的那个。
+
 ## v2.4.11
 
 - **Clearing someone off the attendee list did not reach the minutes.** Who actually turned up
