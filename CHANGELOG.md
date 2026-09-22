@@ -12,6 +12,27 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.9
+
+- **Pressing "重新识别" did not re-read the captions.** The caption reader improved in
+  v2.4.6, but a meeting that had already been processed kept the answer the old reader wrote -
+  including its failure, `没有带名字的字幕行`, which was cached as though it were a finished
+  result. So the one meeting that most needed the new reader was the one that never got it, and
+  the transcript still said `Speaker 2`. The stored match now carries the version of the reader
+  that wrote it; anything older is read again, and the names are worked out again with it.
+- **Two sources agreeing is not a guess.** Where the captions put a name on a voice but not
+  firmly enough to decide alone (a couple of seconds of overlap), and the model independently
+  arrives at the same name from what people called each other in the room, that name is now
+  settled instead of being printed as `Speaker 2 (Alice Chen?)`. Either source alone still is
+  not enough, and neither of them is ever invented.
+
+- **按「重新识别」没有重新读字幕。** v2.4.6 改好了字幕读取，但己经处理过的会议仍照用旧版得出的
+  结果，连它的失败一起缓存（`没有带名字的字幕行`）。结果最需要新读法的那场会，恰恰永远用不上，
+  记录里还是 `Speaker 2`。现在存下的字幕匹配会带上当时读取器的版本，旧的一律重读，名字也跟着重新定。
+- **两个来源说法一致，就不再是推测。** 字幕把一个名字对到了某个声音上，但重合只有几秒、不足以单独
+  定案；如果模型又从会上互相的称呼里得出同一个名字，这个名字现在直接算定，不再写成
+  `Speaker 2 (Alice Chen?)`。单靠任何一边仍然不够，两边都不会凭空造名字。
+
 ## v2.4.8
 
 - **Two meetings processed at once, and the second one died.** Re-processing one recording ten

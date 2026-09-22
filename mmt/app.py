@@ -38,6 +38,7 @@ import llm
 import minutes as M
 import outlook
 import report
+import zmatch
 
 HERE = Path(__file__).resolve().parent
 
@@ -48,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.8"
+VERSION = "2.4.9"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -425,11 +426,20 @@ def _speaker_steps(cfg: dict, d: Path) -> list:
     # is left with
     # only the clusters the captions could not settle. It also means naming works with no
     # model configured at all, which it never could before.
+    # A match left by an older reader is not a finished result, even a failed one: the
+    # reader keeps learning to see the name the client glues onto a caption line, so a
+    # stored "no caption line carried a name" has to be tried again rather than trusted.
+    # And when the captions are read again the names change under whois.py, so it re-runs.
     caps = (d / "captions.jsonl").exists()
-    if caps and (not fresh or not (d / "captions.match.json").exists()):
-        out.append(["?", PY, "-u", str(HERE / "zmatch.py"), str(d)]
-                   + (["--me", cfg["me"]] if cfg.get("me") else []))
-    if (llm.can_auto(cfg) or caps) and (not fresh or not (d / "speakers.json").exists()):
+    redo_names = False
+    if caps:
+        m = _jload(d / "captions.match.json")
+        if not fresh or _count(m.get("rv")) < zmatch.RV:
+            out.append(["?", PY, "-u", str(HERE / "zmatch.py"), str(d)]
+                       + (["--me", cfg["me"]] if cfg.get("me") else []))
+            redo_names = True
+    if (llm.can_auto(cfg) or caps) and (not fresh or redo_names
+                                        or not (d / "speakers.json").exists()):
         out.append(["?", PY, "-u", str(HERE / "whois.py"), str(d)])
     return out
 

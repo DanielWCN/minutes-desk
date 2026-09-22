@@ -44,6 +44,7 @@ MIN_OVERLAP = 4.0     # a cluster with less than this against a name is not evid
 MIN_SHARE = 0.6       # and the winning name has to own this much of the cluster's overlap
 PEAK = 1.10           # the right shift is a sharp peak: it beats everything 5s away by this
 SPREAD = 1.20         # and it stands above the run of the mill shifts by this
+RV = 1                # how this reader works; a match written by an older one is redone
 
 
 def _anchor(ses: Path) -> tuple[float, str]:
@@ -149,7 +150,7 @@ def match(ses: Path, me: str = "") -> dict:
     lines, mine = load_lines(ses, me)
     turns = _turns(ses)
     anchor, src = _anchor(ses)
-    out = {"lines": len(lines), "your_lines": mine, "turns": len(turns),
+    out = {"rv": RV, "lines": len(lines), "your_lines": mine, "turns": len(turns),
            "anchor": anchor, "anchor_from": src, "clusters": {}, "offset_s": None,
            "note": "名字来自 Zoom 自己的字幕，按时间对上声音聚类；文字不取自字幕。"}
     if not lines or not turns or not anchor:

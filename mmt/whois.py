@@ -215,6 +215,12 @@ def decide(ses: Path, cfg: dict, min_talk: float = MIN_TALK,
         if cid in set(ev["ask"]):
             cap[cid] = match_name(who, ev["people"]) or who
     ask = [c for c in ev["ask"] if c not in cap]
+    # The clusters the captions saw but could not settle on their own. A name that is only
+    # leading, not owning, is not enough to decide by itself -- but if the model works out
+    # the same name from what people called each other, two unrelated sources agree and
+    # that is no longer a guess.
+    hint = {int(c): (r.get("name") or "")
+            for c, r in (zmatch.load(ses).get("clusters") or {}).items()}
     t0 = time.time()
     got: dict = {}
     raw = ""
@@ -263,6 +269,11 @@ def decide(ses: Path, cfg: dict, min_talk: float = MIN_TALK,
             row = {"speaker": f"Speaker {cid}", "confidence": "unknown"}
         elif conf == "high":
             row = {"speaker": name, "confidence": "high"}
+            named += 1
+        elif name and match_name(hint.get(int(cid), ""), ev["people"]) == name:
+            row = {"speaker": name, "confidence": "high", "from": "caption+model"}
+            why = ("会议字幕在这个时间显示的也是这个名字（时间重合不足以单独定案，"
+                   "但和会上的称呼对上了）；" + why)
             named += 1
         else:
             row = {"speaker": f"Speaker {cid} ({name}?)",
