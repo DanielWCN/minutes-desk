@@ -85,6 +85,7 @@ SKIP_SUB = re.compile(r"c-message_kit|c-message_list|p-message_pane|p-workspace_
 # "Alice Chen: the upload finished"  /  "Alice Chen (Host): ..."
 NAMED = re.compile(r"^\s*([^:：]{1,40}?)\s*(?:\((?:Host|主持人|Me|我)\)\s*)?[:：]\s*(.+)$", re.S)
 # a caption panel row that carries a clock: "Alice Chen  16:41:02  the upload finished"
+_CJK = re.compile(r"^[\u2e80-\u9fff\u3040-\u30ff\uac00-\ud7af]")
 STAMPED = re.compile(r"^\s*(.{1,40}?)\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)\s+(.+)$", re.S)
 
 
@@ -238,22 +239,80 @@ def scan_text(root, depth: int = 0, limit: int = MAX_DEPTH, hint=None,
     return out
 
 
+_IGN = set(" \t\r\n\u00a0,，、;；:：·|")
+_TRIM = " \t,，、;；:：·|-–—"
+
+
+def _tail_start(whole: str, tail: str) -> int:
+    """Where `tail` starts inside `whole`, ignoring separators. -1 when it is not the tail.
+
+    Separator-blind on purpose. UIA builds a container's Name by joining its children with
+    ", ", so a Zoom caption arrives as "Bob Kumar, Yeah. Hi, Alice." while the child
+    text node says "Yeah. Hi, Daniel." - the same words with one comma more. Slack glues them
+    with nothing at all. One walk handles both.
+    """
+    i, j = len(whole), len(tail)
+    while i > 0 and j > 0:
+        if whole[i - 1] == tail[j - 1]:
+            i -= 1
+            j -= 1
+        elif whole[i - 1] in _IGN:
+            i -= 1
+        elif tail[j - 1] in _IGN:
+            j -= 1
+        else:
+            return -1
+    while j > 0 and tail[j - 1] in _IGN:
+        j -= 1
+    return i if j == 0 else -1
+
+
+def _namey(who: str) -> bool:
+    """Could this leading fragment be a display name? Deliberately strict."""
+    who = who.strip(_TRIM)
+    if not who or len(who) > 40 or who.lower() in STOP:
+        return False
+    if re.search(r"[.?!。？！…]", who):                # a sentence, not a name
+        return False
+    toks = who.split()
+    if not toks or len(toks) > 5:
+        return False
+    if len(toks) == 1:
+        # One word in front of a sentence is far more often the sentence itself - "Noted,
+        # thanks for confirming" - than a display name. Only a short CJK name gets through.
+        if not _CJK.match(toks[0]) or len(toks[0]) > 4:
+            return False
+    for tk in toks:
+        w = tk.strip("()[]（）<>").lstrip("@")
+        if not w:
+            continue
+        if _CJK.match(w):                             # 张伟, さん: no case to check
+            continue
+        if not w[0].isupper():                        # "the", "sending message to"
+            return False
+    return True
+
+
 def pair_items(rows: list[dict]) -> list[dict]:
     """Glue a caption row back together, and drop the copy of it.
 
-    Slack writes one caption as a list item whose own name is the speaker glued straight
-    onto the sentence - "Alice ChenMorning, everyone. This is Alice speaking." - with no
-    colon, no dash, nothing for split() to find. The two halves are also readable as
-    separate text nodes underneath it, which is where the speaker actually comes from.
-    Measured on a real huddle, not guessed.
+    A caption arrives twice: once as the container that holds both the speaker and the
+    sentence, and once as the bare sentence underneath. Neither carries a colon, so split()
+    finds nobody on either, and a whole meeting lands with 340 anonymous lines - which is
+    exactly what one real Zoom meeting did (v2.4.5).
 
-    So: where an item's name is exactly its text children joined end to end, rewrite it as
-    "Name: text" and drop those children, which are the same words a second time and would
-    otherwise be filed as a line with nobody on it.
+    Slack writes the container as a list item whose own name is the speaker glued straight
+    onto the sentence: "Alice ChenMorning, everyone." Zoom's sits a comma in between, because
+    UIA joins children with ", ", and puts the sentence next to it rather than under it.
+
+    So: where a row's name ends with the text of its children - or simply with the whole of
+    the row after it - and what is left in front looks like a name, rewrite it as "Name: text"
+    and drop the copy, which is the same words a second time and would otherwise be filed as
+    a line with nobody on it. Measured on real meetings, both clients, not guessed.
     """
     drop: set[int] = set()
-    for i, r in enumerate(rows):
-        if r["type"] != "ListItemControl" or "d" not in r:
+    for i, r in enumerate(rows):                      # the speaker sits above the sentence
+        if "d" not in r:
             continue
         kids = []
         for j in range(i + 1, len(rows)):
@@ -262,16 +321,38 @@ def pair_items(rows: list[dict]) -> list[dict]:
             kids.append(j)
         parts = [" ".join(rows[j]["name"].split())
                  for j in kids if rows[j]["type"] == "TextControl"]
-        if len(parts) < 2:
+        if not parts:
             continue
         whole = " ".join(r["name"].split())
-        if "".join(parts).replace(" ", "") != whole.replace(" ", ""):
-            continue                           # not a name+sentence pair, leave it alone
-        who, txt = parts[0], " ".join(parts[1:]).strip()
-        if not who or len(who) > 40 or len(who.split()) > 5 or len(txt) < 12:
+        tail = " ".join(" ".join(parts).split())
+        k = _tail_start(whole, tail)
+        if k < 0:
             continue
-        r["name"] = f"{who}: {txt}"
+        if k:
+            who, txt = whole[:k], tail                # Zoom: "Name, sentence" over "sentence"
+        elif len(parts) > 1:
+            who, txt = parts[0], " ".join(parts[1:]).strip()   # Slack: "NameSentence" over both
+        else:
+            continue
+        if len(txt) < 12 or not _namey(who):
+            continue
+        r["name"] = f"{who.strip(_TRIM)}: {txt}"
         drop.update(kids)
+    rows = [r for i, r in enumerate(rows) if i not in drop]
+
+    drop = set()
+    for i in range(len(rows) - 1):                    # the speaker sits beside the sentence
+        if i in drop or (i + 1) in drop:
+            continue
+        a = " ".join(rows[i]["name"].split())
+        b = " ".join(rows[i + 1]["name"].split())
+        if len(b) < 12 or len(a) <= len(b):
+            continue
+        k = _tail_start(a, b)
+        if k <= 0 or not _namey(a[:k]):
+            continue
+        rows[i]["name"] = f"{a[:k].strip(_TRIM)}: {b}"
+        drop.add(i + 1)
     return [r for i, r in enumerate(rows) if i not in drop]
 
 

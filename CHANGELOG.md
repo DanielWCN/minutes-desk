@@ -12,6 +12,47 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.6
+
+Two things a real Zoom meeting broke, both measured on the recording of it.
+
+- **Screen recording died 8 seconds into an 18 minute meeting.** gdigrab does not hand frames
+  over at an even pace - it stalls, then delivers a burst to catch up - and each of those
+  frames was stamped with the wall clock, so two of them landed a millisecond apart. libav
+  then handed the mp4 muxer two packets with the same dts and the muxer answered EINVAL,
+  which ended the capture: 580 KB of a 1102 second meeting. Frame times now sit on the frame
+  grid, and a frame that arrives less than one frame early is folded into the one before it.
+  Reproduced on synthetic arrival times (12 to 19 frames before it failed, three seeds out of
+  three), fixed on the same ones, then confirmed against a live 16 second capture: 45 frames,
+  15.3 seconds of video, no error. An encode or mux error no longer ends the recording either
+  - one unwritable frame costs a frame, and the count is shown next to the size.
+- **Captions were on, 340 lines were captured, and not one of them carried a name.** Zoom
+  prints "Bob Kumar, yes exactly" as one accessibility node with the sentence beside it
+  as another, and neither has a colon in it, so the speaker was dropped on the floor and
+  naming fell back to inferring it from how people addressed each other. Caption rows are now
+  put back together whether the speaker is glued on with nothing (Slack), a comma (Zoom) or
+  any other separator, and the duplicate copy of the sentence is dropped. On that meeting:
+  113 lines named, four speakers, no invented ones; the timing match went from "no caption
+  line carries a name" to three voices pinned by the meeting's own captions, and the model,
+  asked separately, named the same three. A meeting recorded before this release gets its
+  names too, the next time it is processed - the text was already in the log.
+
+真实 Zoom 会议暴露的两个问题，都在那场录音上量过。
+
+- **录屏在 18 分钟的会里 8 秒就死了。** gdigrab 给帧的节奏并不均匀（先卡一下，再一次补几帧），
+  而每帧都按墙上时钟打时间戳，于是有两帧只差 1 毫秒。libav 递给 mp4 封装器两个 dts 相同的包，
+  封装器回 EINVAL，录屏就结束了：1102 秒的会只留下 580 KB。现在帧时间落在帧网格上，
+  比一帧还早到的帧并进前一帧。先用合成的到达时间复现（三个种子都在 12 到 19 帧时失败），
+  同样的输入修好，再用真机 16 秒录屏确认：45 帧、15.3 秒、无报错。写帧出错也不再终止录屏，
+  一帧写不进去就只损失一帧，数量显示在尺寸旁边。
+- **字幕明明开着、抓到了 340 行，却没有一行带名字。** Zoom 把「Bob Kumar, yes exactly」
+  放在一个无障碍节点上，句子本身又单独放在旁边，两边都没有冒号，说话人就被丢掉了，
+  认人只能退回到「听大家怎么互相称呼」。现在无论说话人是直接粘着句子（Slack）、用逗号隔开（Zoom）
+  还是别的分隔符，字幕行都会被重新拼回去，重复的那份句子丢掉。在这场会上：113 行带上了名字，
+  四个人，没有编造出来的名字；时间对齐从「没有带名字的字幕行」变成三个声音由会议字幕本身钉住，
+  而模型单独判断给出的也是同样三个人。这次之前录的会，下次重新处理时也能拿到名字 ——
+  文字本来就在日志里。
+
 ## v2.4.5
 
 Three words from a real meeting, answered - and two of the three turned out to be defects

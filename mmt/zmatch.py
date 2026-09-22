@@ -62,21 +62,49 @@ def _anchor(ses: Path) -> tuple[float, str]:
         return 0.0, ""
 
 
+def _repair(rows: list[dict]) -> list[dict]:
+    """A log where not one line carries a name: the speaker is still glued to the front of it.
+
+    Captures before v2.4.6 filed Zoom's "Bob Kumar, yes exactly" container and the bare
+    sentence next to it as two separate anonymous lines, because neither has a colon in it.
+    pair_items puts them back together, so a meeting recorded then still gets its names when
+    it is processed again. Nothing is re-read from the screen; this is the same text.
+    """
+    try:
+        import zcap
+    except Exception:                                          # noqa: BLE001
+        return rows
+    items = [{"type": "TextControl", "name": (r.get("raw") or r.get("text") or ""), "i": i}
+             for i, r in enumerate(rows)]
+    out = []
+    for it in zcap.pair_items(items):
+        d = dict(rows[it["i"]])
+        who, txt = zcap.split(it["name"])
+        if who:
+            d["speaker"], d["text"] = who, txt
+        out.append(d)
+    return out
+
+
 def load_lines(ses: Path, me: str = "") -> tuple[list[dict], int]:
     """Caption lines that carry a name and are not you. Returns (lines, your line count)."""
     f = ses / "captions.jsonl"
     out, mine = [], 0
     if not f.exists():
         return out, 0
-    me_low = (me or "").strip().lower()
+    rows = []
     for row in f.read_text(encoding="utf-8").splitlines():
         row = row.strip()
         if not row:
             continue
         try:
-            d = json.loads(row)
+            rows.append(json.loads(row))
         except Exception:                                      # noqa: BLE001
             continue
+    if len(rows) > 2 and not any((r.get("speaker") or "").strip() for r in rows):
+        rows = _repair(rows)
+    me_low = (me or "").strip().lower()
+    for d in rows:
         who = (d.get("speaker") or "").strip()
         if not who:
             continue

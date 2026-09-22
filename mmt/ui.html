@@ -1401,7 +1401,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.4.5';
+const UI_VERSION = '2.4.6';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2152,7 +2152,8 @@ function drawRec(st){
   const vd = $('#l_video');
   vd.innerHTML = st.video
     ? (st.video.error ? `<span style="color:var(--bad)">录屏失败：${esc(st.video.error)}</span>`
-       : `录屏 ${esc(st.video.size)} · ${st.video.frames} 帧 · ${(st.video.bytes/1e6).toFixed(1)} MB`)
+       : `录屏 ${esc(st.video.size)} · ${st.video.frames} 帧 · ${(st.video.bytes/1e6).toFixed(1)} MB`
+         + (st.video.skipped ? ` · ${st.video.skipped} 帧没写进去` : ''))
     : '本场还没录屏 · 需要的时候点右上「开始录屏」，从那一刻开始录';
   let w = '';
   if (st.suspends) w += `<div class="note">系统休眠 ${st.suspends} 次，对应时段音频缺失。</div>`;

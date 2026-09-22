@@ -215,6 +215,16 @@ class ScreenGrab(threading.Thread):
     container reports a 0.3 second video, and every key frame frames.py extracts is stamped
     00:00:00, which is the one thing the pictures are for.
 
+    Those timestamps have to sit on the frame grid, though. gdigrab does not hand frames over
+    at an even pace: it stalls, then delivers a burst to catch up. Stamping each of those with
+    the wall clock puts two frames a millisecond apart, libav then hands the mp4 muxer two
+    packets with the same dts, and the muxer answers EINVAL - which killed an 18 minute
+    recording 8 seconds in (v2.4.5 and earlier). So a frame that arrives less than one frame
+    early is folded into the previous one, and pts advances a whole frame at a time.
+
+    An encode or mux error no longer ends the recording either. One unwritable frame costs a
+    frame, not the rest of the meeting.
+
     A private range stops the capture too. Muting the transcript while still filming the
     screen would be a promise the tool does not keep.
     """
@@ -227,6 +237,7 @@ class ScreenGrab(threading.Thread):
         self.fps, self.crf, self.width = fps, crf, width
         self.private = private
         self.frames, self.dropped, self.error = 0, 0, None
+        self.coalesced, self.skipped = 0, 0
 
     def run(self) -> None:
         try:
@@ -248,11 +259,12 @@ class ScreenGrab(threading.Thread):
             os_ = oc.add_stream("libx264", rate=self.fps)
             os_.width, os_.height, os_.pix_fmt = w, h, "yuv420p"
             tb = Fraction(1, 1000)                             # milliseconds, see the docstring
+            step = max(1, int(round(1000 / max(1, self.fps))))  # one frame on the grid
             os_.time_base = tb
             os_.options = {"crf": str(self.crf), "preset": "veryfast", "tune": "stillimage"}
             self.state["video_size"] = f"{w}x{h}"
             t0 = None
-            last_pts = -1
+            last_pts, bad = -1, 0
             for frame in ic.decode(ist):
                 if self.stop.is_set():
                     break
@@ -262,12 +274,25 @@ class ScreenGrab(threading.Thread):
                     self.dropped += 1                          # filmed nothing; the gap shows
                     self.state["video_dropped"] = self.dropped
                     continue
-                f = frame.reformat(width=w, height=h, format="yuv420p")
-                pts = max(last_pts + 1, int((_now() - t0) * 1000))
+                ms = int((_now() - t0) * 1000)
+                if last_pts >= 0 and ms - last_pts < step * 0.8:
+                    self.coalesced += 1                        # a catch-up burst, see the docstring
+                    continue
+                pts = ms if last_pts < 0 else max(last_pts + step, ms)
                 last_pts = pts
+                f = frame.reformat(width=w, height=h, format="yuv420p")
                 f.pts, f.time_base = pts, tb
-                for pkt in os_.encode(f):
-                    oc.mux(pkt)
+                try:
+                    for pkt in os_.encode(f):
+                        oc.mux(pkt)
+                except Exception:                              # noqa: BLE001
+                    bad += 1
+                    self.skipped += 1
+                    self.state["video_skipped"] = self.skipped
+                    if bad >= 30:                              # the container is gone, not jittery
+                        raise
+                    continue
+                bad = 0
                 self.frames += 1
                 self.state["video_frames"] = self.frames
                 if self.frames % self.fps == 0 and self.path.exists():
@@ -500,6 +525,7 @@ def main() -> int:
                 "video": ({"frames": state.get("video_frames", 0),
                            "bytes": state.get("video_bytes", 0),
                            "size": state.get("video_size", ""),
+                           "skipped": state.get("video_skipped", 0),
                            "error": state.get("video_error")} if grab_ref["g"] else None),
                 "suspends": len(susp.events),
                 "endpoint_switches": (wd.switches if wd else []),
@@ -564,6 +590,8 @@ def main() -> int:
                    "fps": args.video_fps, "crf": args.video_crf,
                    "size": state.get("video_size", ""),
                    "bytes": state.get("video_bytes", 0),
+                   "coalesced": grab_ref["g"].coalesced,
+                   "skipped": grab_ref["g"].skipped,
                    "started_at_s": grab_ref["start_s"],
                    "error": grab_ref["g"].error} if grab_ref["g"] is not None else None),
         "tracks": {},
@@ -596,7 +624,8 @@ def main() -> int:
         else:
             print(f"  video    {v['frames']} frames  {v['size']}  {v['bytes']/1e6:.1f} MB"
                   + (f"  ({v['dropped_private']} dropped in private ranges)"
-                     if v.get("dropped_private") else ""))
+                     if v.get("dropped_private") else "")
+                  + (f"  ({v['skipped']} frames unwritable)" if v.get("skipped") else ""))
     if meta["endpoint_switches"]:
         print(f"  endpoint switches: {meta['endpoint_switches']}")
     if susp.events:
