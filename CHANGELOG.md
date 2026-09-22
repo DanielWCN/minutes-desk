@@ -12,6 +12,21 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.8
+
+- **Two meetings processed at once, and the second one died.** Re-processing one recording ten
+  seconds after another loaded large-v3-turbo twice, ten threads and a batch of twelve each,
+  and the second run stopped half a minute in with `RuntimeError: mkl_malloc: failed to
+  allocate memory` - a wall of Python where a transcript should have been. Pressing both is a
+  reasonable thing to do, so the second one now waits for the first to finish and prints one
+  line saying so; nothing is refused and no click is lost. Only transcription queues, since
+  that is the step that wants the memory.
+
+- **两场会一起处理，第二场死了。** 隔十秒重新处理另一场，等于把 large-v3-turbo 装了两遍、
+  各十个线程各 batch 12，第二场半分钟后停在 `RuntimeError: mkl_malloc: failed to allocate
+  memory`，本该是逐字稿的地方是一堆 Python 报错。两场都想跑是很正常的要求，所以现在第二场
+  等第一场跑完，日志里写一行说明；不拒绝、不丢点击。只有语音识别排队，因为吃内存的是它。
+
 ## v2.4.7
 
 - **A traceback in the console window that looked like a crash and was not one.** Aborting a

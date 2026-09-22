@@ -48,7 +48,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.7"
+VERSION = "2.4.8"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -73,11 +73,20 @@ _people_cache: dict = {"sig": None, "data": {}}
 
 
 # ------------------------------------------------------------------------------------ jobs
+# One heavy job at a time. Transcribing loads large-v3-turbo with ten threads and a batch of
+# twelve; two of those at once and the second one dies of "mkl_malloc: failed to allocate
+# memory" half a minute in, which is what happened to a meeting re-processed ten seconds
+# after another one (v2.4.7). Asking for both is a perfectly reasonable thing to do, so the
+# second one waits its turn and says so in its own log instead of being refused or killed.
+_heavy = threading.Semaphore(1)
+
+
 class Job:
     """A subprocess whose stdout is kept as lines the UI can render as it goes."""
 
-    def __init__(self, jid: str, argv: list[str], cwd: Path, label: str):
+    def __init__(self, jid: str, argv: list[str], cwd: Path, label: str, heavy: bool = False):
         self.id, self.argv, self.cwd, self.label = jid, argv, cwd, label
+        self.heavy = heavy
         self.lines: list[str] = []
         self.state = "running"
         self.code: int | None = None
@@ -92,7 +101,13 @@ class Job:
 
     def _run(self) -> None:
         env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+        held = False
         try:
+            if self.heavy and not _heavy.acquire(blocking=False):
+                self.lines.append("排队中：前面还有一场在处理，跑完会自动开始，不用管它")
+                _jobs[self.id] = self.public()
+                _heavy.acquire()
+            held = self.heavy
             p = subprocess.Popen(self.argv, cwd=str(self.cwd), env=env,
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  text=True, encoding="utf-8", errors="replace", bufsize=1)
@@ -107,13 +122,17 @@ class Job:
         except Exception as exc:                               # noqa: BLE001
             self.lines.append(f"!! {type(exc).__name__}: {exc}")
             self.code = -1
+        finally:
+            if held:
+                _heavy.release()
         self.state = "done" if self.code == 0 else "failed"
         _jobs[self.id] = self.public()
 
 
-def start_job(label: str, argv: list[str], cwd: Path | None = None) -> dict:
+def start_job(label: str, argv: list[str], cwd: Path | None = None,
+              heavy: bool = False) -> dict:
     jid = f"{int(time.time()*1000)}"
-    Job(jid, argv, cwd or HERE, label)
+    Job(jid, argv, cwd or HERE, label, heavy)
     return _jobs[jid]
 
 
@@ -1000,7 +1019,7 @@ class H(BaseHTTPRequestHandler):
         # no key, no local server, still a transcript and still a document.
         steps = [asr_argv] + _doc_steps(cfg, d, bld, rpt, bool(b.get("retranscribe")))
         return start_job(f"处理 {name}", [PY, "-u", str(HERE / "_chain.py"),
-                                        json.dumps(steps, ensure_ascii=False)])
+                                        json.dumps(steps, ensure_ascii=False)], heavy=True)
 
     # -- the minutes are a draft until a person has read them. Saving rewrites the
     #    source and re-renders the document through the same report.py the chain uses,
