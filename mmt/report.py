@@ -779,6 +779,11 @@ def main() -> int:
                 md0.unlink()
         except OSError:
             pass
+    # Who was really in the room is ticked on the confirm desk, which happens after these
+    # files were first written, so the header could still be naming people who never came.
+    for fn in ("minutes.md", "minutes.zh.md", "minutes.en.md"):
+        if (ses / fn).exists():
+            M.sync_people(ses / fn, meta, args.me)
     # Which language minutes.md itself is in. It stays the one the page opens on, however
     # many translations sit beside it: the other file is a translation OF this one, and the
     # sheet a person copies into a mail must be the one they read and approved.

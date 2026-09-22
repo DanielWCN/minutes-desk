@@ -12,6 +12,23 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.11
+
+- **Clearing someone off the attendee list did not reach the minutes.** Who actually turned up
+  is ticked on the confirm desk, which comes after the minutes have been drafted - so a person
+  who was invited and never came stayed in the header of the document, and in its distribution
+  line, no matter how many times you cleared the tick and rebuilt. The two fields now follow the
+  roster on every render. Only while they still hold a list the tool wrote itself: type a name of
+  your own in there and the header is yours, untouched. Translations are kept in step too.
+  The place this decision costs nothing is before you press record, so the recording page now
+  says so: the names off the invite are chips, and a no-show is one click to drop.
+
+- **取消勾选一个人，纪要里却还有他。** 谁真的到场是在确认台勾的，而确认台在纪要已经写好之后——
+  所以「邀请了但没来」这个决定做得太晚，文档报头的参会人和发送列表里他一直在，重新生成多少次都不消失。
+  现在这两项每次渲染都跟着名单走，且只在它们还是程序自己写的那份名单时才改：你亲手添了名字，报头就是
+  你的，一个字不动。译文那份也同步。这个决定最不费力的时刻是开录之前，所以录音页的提示直说了：
+  邀请名单每个名字是一张卡，不来的点一下 × 就去掉。
+
 ## v2.4.10
 
 - **"Who was in the meeting" did not list you.** The list on the confirm desk is built from the

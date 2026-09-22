@@ -275,6 +275,68 @@ def _people(meta: dict, talk: dict, me: str) -> list[str]:
     return [k for k in sorted(talk, key=lambda k: -talk[k]) if k.lower() not in skip]
 
 
+def _names(s) -> list[str]:
+    return [n.strip() for n in re.split(r"[;,\u3001\n]+", str(s or "")) if n.strip()]
+
+
+def rosters(meta: dict) -> list[list[str]]:
+    """Every attendee list this session has carried, newest first.
+
+    session.json keeps the earlier value of anything edited, which is what makes it possible
+    to tell a list this tool wrote from a list a person typed.
+    """
+    out = [_names(meta.get("others"))]
+    for e in reversed(meta.get("edits") or []):
+        was = (e or {}).get("was") or {}
+        if isinstance(was, dict) and "others" in was:
+            out.append(_names(was.get("others")))
+    return [r for r in out if r]
+
+
+def sync_people(p: Path, meta: dict, me: str = "") -> bool:
+    """Bring the attendee list in a written set of minutes back in step with the roster.
+
+    Who actually turned up is answered on the confirm desk, which comes AFTER the minutes
+    have been drafted -- so "invited but did not come" was decided too late to reach the
+    header, and a set of minutes kept naming people who were never in the room. Two fields
+    are brought forward, attendees and distribution, and only while they still hold a list
+    this tool wrote itself (the roster as it stood at some point). The moment a person has
+    typed a name of their own in there, the header is theirs and nothing is touched.
+    """
+    try:
+        text = p.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    m = FM_RE.match(text)
+    fm, _ = parse_front_matter(text)
+    known = rosters(meta)
+    if not m or not fm or not known:
+        return False
+
+    def low(xs) -> set:
+        return {str(x).strip().lower() for x in xs if str(x).strip()}
+
+    now, mine = known[0], low([me]) if me else set()
+    have = [str(x).strip() for x in (fm.get("attendees") or []) if str(x).strip()]
+    others = [h for h in have if h.lower() not in mine]
+    head, rest = m.group(1), text[m.end():]
+    done = False
+    if low(others) != low(now) and any(low(others) == low(r) for r in known):
+        keep = ([me] if me and low(have) & mine else []) + now
+        head = re.sub(r"(?m)^attendees:[^\n]*\n(?:[ \t]*-[^\n]*\n?)*",
+                      "attendees:\n" + "".join(f"  - {n}\n" for n in keep), head, count=1)
+        done = True
+    dist = _names(fm.get("distribution"))
+    if low(dist) != low(now) and any(low(dist) == low(r) for r in known):
+        head = re.sub(r"(?m)^distribution:[^\n]*$", "distribution: " + ", ".join(now),
+                      head, count=1)
+        done = True
+    if not done:
+        return False
+    p.write_text("---\n" + head.rstrip("\n") + "\n---\n" + rest, encoding="utf-8")
+    return True
+
+
 def scaffold(ses: Path, tr: dict, meta: dict, me: str = "") -> str:
     talk = tr.get("talk_time_s") or {}
     people = _people(meta, talk, me)

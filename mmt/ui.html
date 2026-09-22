@@ -1152,7 +1152,8 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
             <div class="ol" id="olbox"></div>
 
             <div class="fitem" style="margin-top:10px">
-              <label for="r_others">与会人<i>粘贴会议邀请的收件人或一串名字，自动识别</i></label>
+              <label for="r_others">与会人<i>粘贴会议邀请的收件人或一串名字，自动识别；
+                邀请了但不会来的，现在点名字上的 × 去掉最省事</i></label>
               <textarea id="r_others" rows="2"
                 placeholder="Smith, Alex; Garcia, Maria; Chen, Wei"></textarea>
               <div class="chips" id="r_chips"></div>
@@ -1406,7 +1407,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.4.10';
+const UI_VERSION = '2.4.11';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
