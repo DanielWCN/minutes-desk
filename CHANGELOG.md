@@ -12,6 +12,20 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.7
+
+- **A traceback in the console window that looked like a crash and was not one.** Aborting a
+  media request - clicking a key frame, closing the tab, or the video player deciding it has
+  enough of screen.mp4 for now - makes Windows report WinError 10054, and socketserver prints
+  the whole stack into the black window. The file streamer already ignored the two other ways
+  a client can hang up; it now ignores this one too, and any remaining connection drop is
+  logged as nothing instead of ten frames of Python. A real error still prints in full.
+
+- **黑窗口里那段看着像崩了、其实没崩的报错。** 中途放弃一个媒体请求（点关键帧、关掉页签，
+  或者播放器觉得 screen.mp4 先取这么多就够了）在 Windows 上报的是 WinError 10054，
+  socketserver 就把整段调用栈打进黑窗口。文件流本来已经忽略客户端挂断的另外两种情况，
+  现在这种也一起忽略，其余的连接中断也不再打栈。真出错还是照样完整打印。
+
 ## v2.4.6
 
 Two things a real Zoom meeting broke, both measured on the recording of it.

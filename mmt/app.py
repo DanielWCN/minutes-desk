@@ -48,7 +48,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.6"
+VERSION = "2.4.7"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -531,7 +531,7 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionAbortedError):
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
             pass
 
     def _json(self, obj, code: int = 200) -> None:
@@ -693,7 +693,7 @@ class H(BaseHTTPRequestHandler):
                         break
                     self.wfile.write(chunk)
                     left -= len(chunk)
-        except (BrokenPipeError, ConnectionAbortedError):
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
             pass
 
     # -- POST
@@ -1469,6 +1469,20 @@ class Srv(ThreadingHTTPServer):
     # open from yesterday ends up answering today's page while the new window sits there
     # looking healthy. One port, one server: fail loudly instead.
     allow_reuse_address = False
+
+    def handle_error(self, request, client_address) -> None:
+        """A browser walking away is not an error worth a stack trace.
+
+        Clicking a key frame, closing the tab, or the video player deciding it has enough of
+        screen.mp4 for now all abort a reply half way through, and Windows calls that
+        WinError 10054. socketserver's answer is to print the whole traceback into the black
+        console window, which reads exactly like the tool crashed - it has not, the request
+        simply has nobody left to answer it. Anything else still gets its traceback.
+        """
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionAbortedError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)
 
 
 def _open_when_needed(url: str, wait_s: float = 1.8) -> None:
