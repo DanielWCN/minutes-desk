@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.9"
+VERSION = "2.4.10"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -297,7 +297,7 @@ def _issues(d: Path, tr: dict, n_people: int) -> list[dict]:
         total = _count(spk.get("num_clusters"))
         cap = _count(spk.get("from_captions"))
         add("speakers", "info",
-            f"与会 {n_people} 人，对端 {total} 个声音已分开，其中 {named} 个认出了名字"
+            f"对端 {n_people} 人，{total} 个声音已分开，其中 {named} 个认出了名字"
             + (f"（{cap} 个来自会议字幕）" if cap else ""),
             ("其中会议字幕给出的名字不是推断：字幕显示名字的时刻，正是那个声音在说话的时刻。"
              if cap else "")
@@ -306,7 +306,7 @@ def _issues(d: Path, tr: dict, n_people: int) -> list[dict]:
             "建议核查：逐字稿里带问号的行，请对照录音确认一下是谁。"
             if _count(spk.get("guessed")) else "无需处理，仅供备查。")
     elif n_people > 2:
-        add("speakers", "info", f"与会 {n_people} 人，对端还没有按人分开",
+        add("speakers", "info", f"对端 {n_people} 人，还没有按人分开",
             "系统声音是一路混合音频，需要先按声音分轨再认名字；这一步没有跑成，"
             "所以逐字稿里对端只有一个标签。",
             "需处理：再执行一次 Analysis。若仍然如此，说明分轨模型没装好。")

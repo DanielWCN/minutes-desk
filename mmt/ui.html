@@ -580,6 +580,11 @@ textarea:focus{outline:none;border-color:var(--primary-hi);
 .att .ed:hover{background:var(--pane-3);color:var(--text)}
 .att .ae{display:flex;gap:5px;align-items:center;min-width:0}
 .att .ae input[type=text]{flex:1;min-width:0;width:auto;height:30px;font-size:12.5px}
+/* you are in the room too. Fixed, because your own name is a setting, not a tick box */
+.att .mine>label{cursor:default;border-style:dashed}
+.att .mine input{opacity:.55}
+.att .you{font-style:normal;font-size:10px;padding:1px 5px;border-radius:4px;flex:none;
+  color:var(--primary);background:rgba(56,189,248,.14)}
 
 /* the open questions the machine found: each one gets a tick, or it stays visible */
 .iz{display:flex;flex-direction:column;gap:6px}
@@ -1401,7 +1406,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.4.9';
+const UI_VERSION = '2.4.10';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -3000,7 +3005,18 @@ function drawConfirm(){
   // in the meeting is the only one who knows who actually turned up.
   const all = attList();
   all.forEach(n => { if (!(n in att2)) att2[n] = attOn(n); });
-  $('#c_att').innerHTML = all.length
+  // This list is the far end: the names off the invite, minus you. You were in the room as
+  // well, and the minutes have always said so -- but the page did not, which reads as the
+  // tool having forgotten who recorded it. So you sit at the top, ticked and not tickable:
+  // your own name comes from the settings page, and a meeting you recorded is one you were at.
+  const meRow = (CF.me || '').trim()
+    ? `<div class="ar mine"><label class="on"
+         title="你自己。纪要的与会人里始终有你；名字要改请去设置">
+         <input type="checkbox" checked disabled onclick="return false">
+         <span>${esc(CF.me.trim())}</span><i class="you">你</i>${
+           talkOf(CF.me.trim()) || talkOf('You')}</label></div>`
+    : '';
+  $('#c_att').innerHTML = meRow + (all.length
     ? all.map(n => n === editAtt
         ? `<div class="ae"><input type="text" id="c_ren" value="${esc(nameOf(n))}"
              onkeydown="if(event.key==='Enter'){event.preventDefault();renDone()}
@@ -3011,11 +3027,12 @@ function drawConfirm(){
              ${att2[n] ? 'checked' : ''} onchange="togAtt(${jq(n)})">
              <span>${esc(nameOf(n))}</span>${talkOf(nameOf(n))}</label>
            <b class="ed" title="更正该姓名的拼写" onclick="renOn(${jq(n)})">更正</b></div>`).join('')
-    : '<span class="sub">暂无名单。可点击右侧「从 Outlook 读取邀请」，或在下方补充。</span>';
+    : '<span class="sub">暂无名单。可点击右侧「从 Outlook 读取邀请」，或在下方补充。</span>');
   const on = all.filter(n => att2[n]).length;
+  const mine = (CF.me || '').trim() ? 1 : 0;
   $('#c_ahint').innerHTML = all.length
-    ? `纪要与会人为已勾选的 <b>${on}</b> 人${CF.talk_time_s ? ' · 音频为本端、对端两轨，' +
-        '三人以上不标注发言人' : ''}`
+    ? `纪要与会人共 <b>${on + mine}</b> 人${mine ? `：你 + 勾选的 ${on} 人` : ''}${
+        CF.talk_time_s ? ' · 音频为本端、对端两轨，三人以上不标注发言人' : ''}`
     : '';
   if (editAtt !== null){ const e = $('#c_ren'); if (e) e.focus(); }
   if (custAt !== null){ const e = $('#c_cust'); if (e){ e.focus(); e.select(); } }

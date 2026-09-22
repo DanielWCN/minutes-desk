@@ -12,6 +12,21 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.10
+
+- **"Who was in the meeting" did not list you.** The list on the confirm desk is built from the
+  invite with your own name taken out, because the far end is what the tool has to work out;
+  read as a list of who was there, it looked like the tool had forgotten who recorded the
+  meeting. The minutes always did include you. You now sit at the top of that list, ticked and
+  not tickable - your own name is a setting, and a meeting you recorded is one you were at - and
+  the line underneath counts you in. The notice about voices being separated now says "对端 N 人"
+  rather than "与会 N 人", which is what it always meant.
+
+- **「参加会议的人」里没有你自己。** 确认台上那份名单是从会议邀请里来的，并且去掉了你自己，因为需要
+  程序去认的只有对端；但它写的是「参加会议的人」，看起来就像把录这场会的人忘了。纪要里一直有你。
+  现在你就在名单第一个，已勾选且不可取消（你的名字在设置里改；你录的会，你当然在场），下面的
+  人数也把你算进去了。声音分轨的提示也从「与会 N 人」改成了它本来的意思：「对端 N 人」。
+
 ## v2.4.9
 
 - **Pressing "重新识别" did not re-read the captions.** The caption reader improved in
