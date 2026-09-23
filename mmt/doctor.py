@@ -22,6 +22,7 @@ from pathlib import Path
 from datetime import datetime
 
 import config
+import llm
 
 
 # Three of these seven checks are the only ones a user cares about before a meeting:
@@ -34,10 +35,10 @@ RANK = {"ok": 0, "todo": 1, "warn": 2, "fail": 3}
 # The report is grouped, because a user handed this tool needs to see that three separate
 # things were inspected - can this machine run it, can it hear both sides, is there room
 # to put the result - and not a run of seven unrelated lines.
-GROUPS = ("运行环境", "音频通路", "存储")
+GROUPS = ("运行环境", "音频通路", "存储", "纪要引擎")
 GROUP = {"python": "运行环境", "packages": "运行环境", "model": "运行环境",
          "mic": "音频通路", "loopback": "音频通路", "levels": "音频通路",
-         "paths": "存储"}
+         "paths": "存储", "engine": "纪要引擎"}
 
 
 def _row(cid: str, name: str, state: str, detail: str, fix: dict | None = None,
@@ -250,6 +251,66 @@ def check_levels(cfg: dict, seconds: float = 3.0, tone: bool = True) -> dict:
     return done("ok", "")
 
 
+def check_engine(cfg: dict) -> dict:
+    """Whether the minutes can actually be written, which is not a thing the other seven
+    checks look at.
+
+    They all passed on a machine that then produced an all-TBD scaffold and called itself
+    done, because "can this machine hear the meeting" and "can anything turn what it heard
+    into minutes" are different questions and only the first one was being asked. Seven
+    green rows are a promise; this is the eighth.
+    """
+    eng = (cfg.get("engine") or "assistant").strip()
+    if eng == "assistant":
+        a = llm.assistant()
+        if a.get("error"):
+            return _row("engine", "纪要正文谁来写", "warn",
+                        a["error"],
+                        {"action": "engine", "label": "去设置"},
+                        note="assistants.json 里有错，已经按自动"
+                             "找到的助手继续。修好或"
+                             "删掉那个文件就不再提醒。")
+        if a.get("cli"):
+            how = "自动找到" if a.get("src") == "found" else "assistants.json"
+            return _row("engine", "纪要正文谁来写", "ok",
+                        f"{a['name']}（{how}）· 录完点一次"
+                        "分析，正文自己写好",
+                        table=[["命令", " ".join(a["cli"])]])
+        if a.get("name"):
+            return _row("engine", "纪要正文谁来写", "warn",
+                        f"找到了 {a['name']}，但没有可"
+                        "以自动调用的命令",
+                        {"action": "engine", "label": "去设置"},
+                        note="现在只能复制提示词、"
+                             "自己粘回来。")
+        return _row("engine", "纪要正文谁来写", "warn",
+                    "没找到 Aki",
+                    {"action": "engine", "label": "去设置"},
+                    note="装了 Aki 就自动可用，不用"
+                         "配任何东西；或者在设置"
+                         "里填一个 API。不配也能录"
+                         "、能出逐字稿，只是正文"
+                         "要自己复制粘回来。")
+    if eng == "api":
+        if not (cfg.get("api_base") and cfg.get("api_model") and cfg.get("api_key")):
+            return _row("engine", "纪要正文谁来写", "warn",
+                        "自带 API：地址、模型名、"
+                        "密钥没填齐",
+                        {"action": "engine", "label": "去设置"})
+        return _row("engine", "纪要正文谁来写", "ok",
+                    f"{cfg.get('api_model')} @ {cfg.get('api_base')}")
+    if eng == "local":
+        if not llm.ollama_exe():
+            return _row("engine", "纪要正文谁来写", "warn",
+                        "选的是本机模型，但没装 Ollama",
+                        {"action": "engine", "label": "去设置"})
+        return _row("engine", "纪要正文谁来写", "ok",
+                    f"Ollama · {cfg.get('local_model') or '未选模型'}")
+    return _row("engine", "纪要正文谁来写", "warn",
+                f"不认识的引擎 {eng}",
+                {"action": "engine", "label": "去设置"})
+
+
 def check_paths(cfg: dict) -> dict:
     rows = []
     for key, label in (("staging_dir", "本地暂存"), ("archive_dir", "OneDrive 归档")):
@@ -318,7 +379,8 @@ def _report(checks: list[dict], cfg: dict) -> list[dict]:
     lv = by.get("levels", {})
     pk = lv.get("peaks") or {}
     out = []
-    for cid in ("python", "packages", "model", "mic", "loopback", "levels", "paths"):
+    for cid in ("python", "packages", "model", "mic", "loopback", "levels", "paths",
+                "engine"):
         c = by.get(cid)
         if not c:
             continue
@@ -381,6 +443,7 @@ def run(cfg: dict | None = None, levels: bool = False) -> dict:
               check_mic(cfg), check_loopback(cfg)]
     checks.append(check_levels(cfg) if levels else _remembered(cfg))
     checks.append(check_paths(cfg))
+    checks.append(check_engine(cfg))
     if levels:
         cfg = config.load()                        # pick up the just-saved last_test
     rows = _report(checks, cfg)

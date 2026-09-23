@@ -112,40 +112,84 @@ def local_pick() -> dict:
     return {"ram_gb": g, "model": "", "why": ""}
 
 
-def assistant() -> dict:
-    """The local AI assistant app this machine has, if any.
+# Assistants this tool knows how to drive without being told. Detection only: finding a
+# program is not the same as being allowed to send it a meeting, which is still one click
+# in the page (cli_ack). The point of the list is that the click is the ONLY thing left -
+# nobody should have to hand-write a JSON file to get the minutes they were promised.
+#
+# Each entry is (display name, candidate paths, the flag that makes it read stdin). Paths
+# take %VAR%. Order matters inside an entry: the first one that exists wins.
+KNOWN_ASSISTANTS = (
+    ("Aki", ("%LOCALAPPDATA%/Aki/Aki.exe",
+             "%LOCALAPPDATA%/Programs/Aki/Aki.exe",
+             "%PROGRAMFILES%/Aki/Aki.exe"), ("--cli",)),
+)
 
-    Nothing is hard-coded on purpose. The copy-paste path works with any assistant -
-    a desktop app, a browser tab, a phone - so shipped code has no business preferring
-    one. If you want the engine card to name yours, drop a file in the user directory:
+
+def found_assistant() -> dict:
+    """The assistant that is on this disk, with no configuration at all."""
+    for name, paths, flags in KNOWN_ASSISTANTS:
+        for raw in paths:
+            path = os.path.expandvars(str(raw))
+            if path and Path(path).exists():
+                return {"name": name, "path": path, "cli": [path, *flags], "src": "found"}
+    return {}
+
+
+def assistant() -> dict:
+    """The local AI assistant app this machine has, if any, and how to call it.
+
+    Two ways this can be answered, in this order.
+
+    A file the person wrote wins, because naming a program by hand is the clearest possible
+    statement of which one they meant:
 
         assistants.json
         [{"name": "Foo",
           "path": "C:/.../Foo.exe",
           "cli":  ["C:/.../Foo.exe", "--cli"]}]
 
-    First entry whose path exists wins; %VAR% in the path is expanded. No file means the
-    card says the engine needs no install, which is the honest answer.
+    First entry whose path exists wins; %VAR% in the path is expanded. `cli` is what turns
+    copy-paste into no-paste: a command that reads a prompt on stdin and writes the answer
+    to stdout. Most assistants that ship a terminal binary have one.
 
-    `cli` is optional and is what turns copy-paste into no-paste: a command that reads a
-    prompt on stdin and writes the answer to stdout. Most assistants that ship a terminal
-    binary have one. It stays a list in a user file rather than code because the flag is
-    different for every one of them, and because a tool that silently launches whatever
-    it found on the disk would deserve the suspicion.
+    Failing that, KNOWN_ASSISTANTS is searched. This used to be deliberately absent -- the
+    reasoning was that a tool which silently launches whatever it found on the disk deserves
+    suspicion. That reasoning was wrong in one direction and it cost real people real work:
+    with no file, the tool quietly fell back to handing them a prompt to paste somewhere
+    themselves, after an analysis that looked finished. Finding the program does not send it
+    anything. The sending is still gated on a click that names it (cli_ack), and that click
+    now has somewhere to happen.
+
+    A file that will not parse is reported rather than swallowed. A byte-order mark from
+    Notepad or PowerShell's Set-Content used to be indistinguishable from "no assistant
+    here", which is a miserable thing to debug. utf-8-sig eats the mark; anything else that
+    goes wrong comes back in `error` for the page to show.
     """
+    err = ""
     try:
         import config                                          # noqa: PLC0415
         f = config.user_dir() / "assistants.json"
-        for e in json.loads(f.read_text(encoding="utf-8")):
-            path = os.path.expandvars(str(e.get("path") or ""))
-            if path and Path(path).exists():
-                argv = [os.path.expandvars(str(a)) for a in (e.get("cli") or []) if str(a)]
-                if argv and not Path(argv[0]).exists():
-                    argv = []
-                return {"name": str(e.get("name") or "").strip(), "path": path, "cli": argv}
+        if f.exists():
+            try:
+                entries = json.loads(f.read_text(encoding="utf-8-sig"))
+            except Exception as exc:                           # noqa: BLE001
+                entries = []
+                err = f"assistants.json \u8bfb\u4e0d\u4e86\uff1a{exc}"
+            for e in entries if isinstance(entries, list) else []:
+                path = os.path.expandvars(str((e or {}).get("path") or ""))
+                if path and Path(path).exists():
+                    argv = [os.path.expandvars(str(a)) for a in (e.get("cli") or []) if str(a)]
+                    if argv and not Path(argv[0]).exists():
+                        argv = []
+                    return {"name": str(e.get("name") or "").strip(), "path": path,
+                            "cli": argv, "src": "file", "error": err}
     except Exception:                                          # noqa: BLE001
         pass
-    return {"name": "", "path": "", "cli": []}
+    hit = found_assistant()
+    if hit:
+        return {**hit, "error": err}
+    return {"name": "", "path": "", "cli": [], "src": "", "error": err}
 
 
 def assistant_name() -> str:
@@ -221,6 +265,7 @@ def detect() -> dict:
     a = assistant()
     return {"assistant": a["name"], "assistant_cli": bool(a["cli"]),
             "assistant_exe": (Path(a["cli"][0]).name if a["cli"] else ""),
+            "assistant_src": a.get("src") or "", "assistant_error": a.get("error") or "",
             "ollama_installed": bool(ollama_exe()),
             "ollama_running": ol_up, "ollama_models": ollama_models() if ol_up else [],
             "local": local_pick(), "presets": PRESETS}

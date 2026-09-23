@@ -12,6 +12,50 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.13
+
+- **On an Amazon machine the minutes now write themselves, with nothing to paste.** The tool
+  could call Aki all along, but only if a file called assistants.json told it where Aki was,
+  and nobody has that file. Without it the two steps that write the body and the Chinese sheet
+  were dropped from the chain in silence: you got a transcript, a correct list of names, and a
+  set of minutes whose every heading said "to be written". The tool now looks for Aki where
+  Aki installs itself, so an internal machine needs no configuration at all. Press analyse once
+  and the body, the Chinese version and the finished document all come out together.
+  If Aki really is not installed the engine card says so in red and the self-check flags it,
+  instead of leaving you with a blank form and seven green ticks.
+
+- **公司电脑上纪要现在自己写完，不用再复制去粘贴。** 工具一直会调 Aki，但前提是有个叫 assistants.json
+  的文件告诉它 Aki 在哪——而没人有这个文件。没有它，写正文和写中文版这两步会被静默地从流程里去掉：
+  你拿到的是转写、对得上的人名，和一份每个小标题都写着「待撰写」的纪要。现在工具会去 Aki 自己安装的位置
+  找它，所以内部电脑什么都不用配。按一次「开始分析」，正文、中文版、成文的文档一起出来。
+  如果确实没装 Aki，引擎卡片会红着告诉你，自检也会点出来，而不是给你一张空表格加七个绿勾。
+
+- **The wait after you press stop was as long as the meeting.** Live mode transcribes while you
+  talk, but it did the two tracks one after the other: your colleagues' audio was tailed until
+  the recording ended, so your own microphone track had not been touched at all, and only then
+  did it start from zero on a file as long as the whole call - at half the cores, at low
+  priority, exactly when the machine had gone idle. A 40 minute meeting therefore still had
+  40 minutes of audio to get through after you pressed stop. Both tracks now advance together,
+  a few minutes of audio at a time, so what is left at the end is a few minutes and not a
+  meeting. Low priority is also released the moment the recording stops: there is no longer
+  anything to keep out of the way of. Nothing about how the audio is cut or decoded changed,
+  so the words come out the same.
+
+- **按下停止之后要等的时间，和会议一样长。** 边开会边转写没问题，但两条音轨是一条做完再做下一条：
+  别人的声音那条一直跟到录音结束，你自己麦克风那条根本没开始，然后才从头开始处理一个和整场会一样长的
+  文件——还是一半的核、低优先级，正好在机器已经闲下来的时候。所以一场 40 分钟的会，按下停止之后
+  还剩 40 分钟的音频要处理。现在两条音轨一起往前走，一次几分钟，结束时剩下的是几分钟而不是一整场会。
+  录音一停也立刻恢复正常优先级：已经没有需要让路的东西了。音频怎么切、怎么解码都没有动，所以出来的字一样。
+
+- **An eighth self-check: the minutes engine.** The seven checks all being green while the thing
+  that writes the minutes was not configured is what made a half-finished result look finished.
+  The new row names the engine it will actually use, and it warns rather than fails, because a
+  missing minutes engine must never stop you from recording.
+
+- **自检多了第八项：纪要引擎。** 七项全绿、而真正写纪要的那一环没配好，才是让一份没写完的结果看上去
+  像写完了的原因。新增的那一行会写出它实际会用哪个引擎，而且只是警告不算失败——写纪要的引擎没准备好，
+  绝不该拦着你录音。
+
 ## v2.4.12
 
 - **Naming could be skipped after it failed.** The step that reads the meeting's own captions

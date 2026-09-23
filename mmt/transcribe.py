@@ -35,6 +35,17 @@ MIN_CHUNK_S = 300.0     # don't bother transcribing less than this while live
 TAIL_SEARCH_S = 25.0    # look for a silent cut point in this much of the tail
 MIN_CUT_GAP_S = 0.35    # a cut point needs at least this much quiet
 POLL_S = 10.0
+BELOW_NORMAL = 0x00004000
+NORMAL = 0x00000020
+
+
+def _priority(level: int) -> None:
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetPriorityClass(
+            ctypes.windll.kernel32.GetCurrentProcess(), level)
+    except Exception:                                        # noqa: BLE001
+        pass
 
 
 def _load_glossary(p: Path) -> dict:
@@ -171,63 +182,114 @@ def _save(path: Path, segs: list[dict], done: bool, elapsed: float) -> None:
         ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def transcribe_track(eng: Engine, wav: Path, out: Path, live: bool, session_done) -> dict:
-    segs: list[dict] = []
-    cursor = 0
-    t_proc = 0.0
-    audio_s = 0.0
+class Track:
+    """One WAV being transcribed, and how far along it is."""
+
+    def __init__(self, wav: Path, out: Path):
+        self.wav = wav
+        self.out = out
+        self.segs: list[dict] = []
+        self.cursor = 0
+        self.t_proc = 0.0
+        self.audio_s = 0.0
+        self.done = False
+
+    def report(self) -> dict:
+        return {"track": self.wav.stem, "segments": len(self.segs),
+                "audio_s": round(self.audio_s, 1),
+                "process_s": round(self.t_proc, 1),
+                "speed_x_realtime": (round(self.audio_s / self.t_proc, 2)
+                                     if self.t_proc else None)}
+
+
+def _one_chunk(eng: Engine, tr: Track, finished: bool) -> bool:
+    """Transcribe at most ONE chunk of one track. Returns True if it did real work.
+
+    Sets tr.done when the cursor has reached the end and nothing more is coming, and
+    writes the final complete=true file at that moment.
+    """
+    avail = _frames(tr.wav)
+    pending = avail - tr.cursor
+    enough = pending >= int(MIN_CHUNK_S * SR)
+    worked = False
+
+    if enough or (finished and pending > int(0.5 * SR)):
+        # One chunk at a time, never the rest of the file. _find_cut() only searches the
+        # last TAIL_SEARCH_S of what it is handed, so a block longer than one chunk puts
+        # the search window at the end of the *track*: the cut degenerates to len(block)
+        # and the whole recording goes into a single transcribe() call. Live mode hid
+        # this because a growing file never had more than a chunk available anyway; a
+        # finished file does, and a 53 minute call kills CTranslate2 with a native stack
+        # overflow (0xC00000FD) after burning 40 seconds.
+        block = _read(tr.wav, tr.cursor, min(avail, tr.cursor + int(MIN_CHUNK_S * SR)))
+        # Chunk even when the file is already complete: a 30 minute track handled in one
+        # go prints nothing for a quarter of an hour, and the UI cannot tell "working"
+        # from "hung". Cutting at a silent point keeps quality identical.
+        cut = _find_cut(block, int(MIN_CHUNK_S * SR * 0.6)) if enough else len(block)
+        chunk = block[:cut]
+        if chunk.size > int(0.5 * SR):
+            t0 = time.time()
+            new = eng.run(chunk, tr.cursor / SR, tr.wav.stem)
+            tr.t_proc += time.time() - t0
+            tr.audio_s += len(chunk) / SR
+            tr.segs.extend(new)
+            tr.cursor += cut
+            _save(tr.out, tr.segs, finished and tr.cursor >= avail, tr.t_proc)
+            rt = (tr.audio_s / tr.t_proc) if tr.t_proc else 0.0
+            print(f"  [{tr.wav.name}] {tr.cursor/SR:7.1f}s done, {len(tr.segs):4d} segs, "
+                  f"{rt:4.1f}x realtime", flush=True)
+            worked = True
+        else:
+            tr.cursor = avail
+
+    # A tail under half a second is not worth a transcribe() call, but it still has to
+    # end the loop: the branch above ignores it, so the cursor can never reach the end
+    # and one-shot mode used to spin on a fraction of a second at 100% CPU forever.
+    if finished and _frames(tr.wav) - tr.cursor <= int(0.5 * SR):
+        tr.done = True
+        _save(tr.out, tr.segs, True, tr.t_proc)
+    return worked
+
+
+def transcribe_tracks(eng: Engine, tracks: list[Track], live: bool, session_done) -> list[dict]:
+    """Transcribe every track, interleaved one chunk at a time.
+
+    Doing the tracks one after the other is what made live mode feel slow, and the cause
+    is not obvious. While the meeting runs, the first track's loop tails a growing file
+    until session_done() says stop, so the SECOND track is not touched at all during the
+    meeting. It then starts from frame zero on a file as long as the whole call, at half
+    the cores and BELOW_NORMAL priority, at exactly the moment the machine went idle. A
+    40 minute meeting therefore still had ~40 minutes of audio to get through after the
+    user pressed stop, which reads as "it hangs".
+
+    Round-robin keeps both tracks within one chunk of each other, so the wait at the end
+    is one chunk of audio rather than one meeting. When the recorder is gone we also drop
+    back to normal priority: there is nothing left to be polite to.
+    """
+    boosted = not live
     while True:
-        avail = _frames(wav)
-        finished = session_done()
-        pending = avail - cursor
-        enough = pending >= int(MIN_CHUNK_S * SR)
-        if not live:
-            finished = True
-
-        if enough or (finished and pending > int(0.5 * SR)):
-            # One chunk at a time, never the rest of the file. _find_cut() only searches the
-            # last TAIL_SEARCH_S of what it is handed, so a block longer than one chunk puts
-            # the search window at the end of the *track*: the cut degenerates to len(block)
-            # and the whole recording goes into a single transcribe() call. Live mode hid
-            # this because a growing file never had more than a chunk available anyway; a
-            # finished file does, and a 53 minute call kills CTranslate2 with a native stack
-            # overflow (0xC00000FD) after burning 40 seconds.
-            block = _read(wav, cursor, min(avail, cursor + int(MIN_CHUNK_S * SR)))
-            # Chunk even when the file is already complete: a 30 minute track handled in one
-            # go prints nothing for a quarter of an hour, and the UI cannot tell "working"
-            # from "hung". Cutting at a silent point keeps quality identical.
-            if enough:
-                cut = _find_cut(block, int(MIN_CHUNK_S * SR * 0.6))
-            else:
-                cut = len(block)
-            chunk = block[:cut]
-            if chunk.size > int(0.5 * SR):
-                t0 = time.time()
-                new = eng.run(chunk, cursor / SR, wav.stem)
-                t_proc += time.time() - t0
-                audio_s += len(chunk) / SR
-                segs.extend(new)
-                cursor += cut
-                _save(out, segs, finished and cursor >= avail, t_proc)
-                rt = (audio_s / t_proc) if t_proc else 0.0
-                print(f"  [{wav.name}] {cursor/SR:7.1f}s done, {len(segs):4d} segs, "
-                      f"{rt:4.1f}x realtime", flush=True)
-            else:
-                cursor = avail
-
-        # A tail under half a second is not worth a transcribe() call, but it still has to
-        # end the loop: the branch above ignores it, so cursor can never reach the end and
-        # one-shot mode used to spin on a fraction of a second at 100% CPU forever.
-        if finished and _frames(wav) - cursor <= int(0.5 * SR):
+        finished = session_done() if live else True
+        if finished and not boosted:
+            boosted = True
+            _priority(NORMAL)
+            print("  录音结束，CPU 全开", flush=True)
+        worked = False
+        for tr in tracks:
+            if not tr.done:
+                worked = _one_chunk(eng, tr, finished) or worked
+        if all(tr.done for tr in tracks):
             break
-        if not live:
-            continue                      # keep going through the rest of the file at once
+        # Sleeping only makes sense when we are waiting for more audio to arrive. After
+        # real work there may already be another chunk ready on the next track.
+        if worked or not live:
+            continue
         time.sleep(POLL_S)
+    return [tr.report() for tr in tracks]
 
-    _save(out, segs, True, t_proc)
-    return {"track": wav.stem, "segments": len(segs), "audio_s": round(audio_s, 1),
-            "process_s": round(t_proc, 1),
-            "speed_x_realtime": round(audio_s / t_proc, 2) if t_proc else None}
+
+def transcribe_track(eng: Engine, wav: Path, out: Path, live: bool, session_done) -> dict:
+    """A single track on its own. Thin wrapper kept for callers that want just one."""
+    return transcribe_tracks(eng, [Track(wav, out)], live, session_done)[0]
 
 
 def main() -> int:
@@ -265,12 +327,7 @@ def main() -> int:
         Path(__file__).with_name("glossary.base.json"))
 
     if args.live:
-        try:  # be a good citizen: don't fight Zoom for CPU
-            import ctypes
-            ctypes.windll.kernel32.SetPriorityClass(
-                ctypes.windll.kernel32.GetCurrentProcess(), 0x00004000)  # BELOW_NORMAL
-        except Exception:
-            pass
+        _priority(BELOW_NORMAL)   # be a good citizen: don't fight Zoom for CPU
 
     print(f"model={args.model} threads={threads} batch={args.batch} live={args.live}")
     t0 = time.time()
@@ -302,7 +359,7 @@ def main() -> int:
 
     session_done = live_done if args.live else (lambda: True)
 
-    report = []
+    todo = []
     for name in TRACKS:
         wav = ses / name
         if not wav.exists():
@@ -310,9 +367,10 @@ def main() -> int:
         if want is not None and wav.stem not in want:
             print(f"\n-- {name}  跳过（不在 --only 里）")
             continue
-        print(f"\n-- {name}")
-        report.append(transcribe_track(eng, wav, ses / f"{wav.stem}.segments.json",
-                                       args.live, session_done))
+        print(f"-- {name}")
+        todo.append(Track(wav, ses / f"{wav.stem}.segments.json"))
+    # Both tracks at once, a chunk each, so neither waits for the other to finish.
+    report = transcribe_tracks(eng, todo, args.live, session_done) if todo else []
 
     # A skipped track's numbers are still true, and build.py and report.py read this file.
     # So --only merges into the old report instead of publishing one that claims the

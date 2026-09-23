@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.12"
+VERSION = "2.4.13"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -462,12 +462,14 @@ def _draft_step(cfg: dict, d: Path) -> list:
     """
     The chain step that writes the minutes with a model, or nothing at all.
 
-    Nothing at all in two cases. On the `assistant` engine with no `cli` in assistants.json
-    there is no model to call: the person holds the prompt and pastes the answer back, by
-    design, and that is still the shipped default. And once minutes.md says
-    something a person wrote or approved, a rebuild must not quietly replace it -- pressing
-    "generate documents" again is a request to re-render, not to re-write. So the model is
-    only let near a file that is still the untouched scaffold, or missing.
+    Nothing at all in two cases. When there is no model to call at all: no assistant found
+    on the machine and no API configured, and then the person holds the prompt and pastes
+    the answer back. On an Amazon machine that case should not happen -- llm.assistant()
+    finds Aki without any configuration -- and the self-check says so in words when it does.
+    And once minutes.md says something a person wrote or approved, a rebuild must not
+    quietly replace it: pressing "generate documents" again is a request to re-render, not
+    to re-write. So the model is only let near a file that is still the untouched scaffold,
+    or missing.
     """
     if not llm.can_auto(cfg):
         return []

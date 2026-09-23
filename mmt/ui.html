@@ -1407,7 +1407,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.4.12';
+const UI_VERSION = '2.4.13';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -1827,6 +1827,7 @@ async function fix(f){
   if (f.action === 'levels'){ levels(); return; }
   if (f.action === 'open_dir'){ await api('/api/open', {path:S.config[f.key]}); return; }
   if (f.action === 'pick_path') toCfg(f.key === 'archive_dir' ? '#c_arch' : '#c_stage');
+  if (f.action === 'engine') toCfg('#engw');
 }
 
 async function levels(){
@@ -2508,20 +2509,17 @@ async function reviseGo(){
       + `<code>${revWhich}.bak</code>，改坏了可以拿回来。`);
   watch(await api('/api/minutes/revise', {session:s.name, file:revWhich}), '#jlog');
 }
-/* Asked once, then never again: naming a program in assistants.json is not the same as
-   agreeing that this meeting may be handed to it, and the model behind that program is
-   not necessarily on this machine. Same shape as the API acknowledgement. */
-async function cliOk(){
-  if (engCur() !== 'assistant') return true;
-  if (E && E.cli_ack) return true;
-  const who = (E && E.assistant_exe) || 'assistants.json 里那个程序';
-  if (!confirm('接下来会把这场会的逐字稿和纪要，交给 ' + who + ' 背后的模型处理。'
-      + '那个模型不一定在这台机器上。\n\n只问这一次，以后不再问。\n\n继续？')) return false;
-  const r = await api('/api/config', {cli_ack:true});
-  if (r.error){ alert(r.error); return false; }
-  await engLoad(0);
-  return !!(E && E.cli_ack);
-}
+/* There used to be a one-time confirm here, before handing a meeting to the assistant.
+   It is gone, and the reason is that it had stopped being a choice. Pressing analyse now
+   writes the body and the Chinese version as part of the chain, because a tool that hands
+   you a prompt to paste into a chat window by hand is not finishing its job. So the
+   assistant sees the transcript either way, and a modal on one of the two buttons that
+   reach it only made the SAME thing feel optional. Where it is said instead, in words and
+   without a click: the engine card names the assistant it found, the self-check has a row
+   for it, and the bar above an unwritten page says which route is live. The API engine
+   keeps its own acknowledgement, because that one really does leave for a service the
+   person chose and pays for. */
+async function cliOk(){ return true; }
 
 /* A skeleton full of TBD is not minutes. The bar sits above the paper only while the
    body is missing, and it says which route is live before it offers a button. */
@@ -2660,28 +2658,40 @@ function engDraw(){
   <div class="eno${on('assistant')}">
     <div class="eh" onclick="engPick('assistant')"><u></u><b>交给 AI 助手</b>
       ${E.assistant_cli
-        ? `<span class="tag green">${esc(E.assistant)} · 可自动调用</span>`
-        : E.assistant ? `<span class="tag green">已检测到 ${esc(E.assistant)}</span>`
-        : '<span class="tag green">无需安装</span>'}
+        ? `<span class="tag green">${esc(E.assistant)} · 自动写正文</span>`
+        : E.assistant ? `<span class="tag gold">找到 ${esc(E.assistant)}，但不能自动调用</span>`
+        : '<span class="tag red">没找到 Aki</span>'}
       <i>${E.assistant_cli
-        ? '录完点分析，纪要自己写好，不用复制粘贴'
-        : '不联网、不装模型，逐字稿不出这台电脑'}</i></div>
+        ? '录完点一次分析，逐字稿、纪要、文档一次到位'
+        : '正文写不出来，只能自己复制粘贴'}</i></div>
     <div class="eb">
+      ${E.assistant_error
+        ? `<div class="hint" style="border-color:#e0524a"><b>assistants.json 读不了</b>
+             <div style="margin-top:6px"><code>${esc(E.assistant_error)}</code></div>
+             <div style="margin-top:6px">最常见的原因是用 PowerShell 的
+               <code>Set-Content -Encoding UTF8</code> 写的，文件头多了一个 BOM。
+               这个版本已经能吃掉 BOM，所以还报错就是 JSON 本身写错了。
+               不想管它就把那个文件删掉，工具会自己找 Aki。</div></div>`
+        : ''}
       ${E.assistant_cli ? `
-      <div class="hint"><b>${esc(E.assistant)}</b> 就在这台电脑上，
-        assistants.json 里又给了它的命令行（<code>${esc(E.assistant_exe)}</code>），
-        所以工具直接把提示词从 stdin 送进去、把整份正文从 stdout 接回来。
-        录完点一次分析，逐字稿、纪要、文档一次到位。</div>
+      <div class="hint"><b>${esc(E.assistant)}</b> 就在这台电脑上${
+        E.assistant_src === 'found'
+          ? '，工具自己找到的，不需要配置任何东西'
+          : '，assistants.json 里指定的'}（<code>${esc(E.assistant_exe)}</code>）。
+        工具把提示词从 stdin 送进去、把整份正文从 stdout 接回来，
+        所以录完点一次分析，逐字稿、中英两份纪要、文档一次到位。</div>
       <div class="hint">工具自己仍然不联网；那个助手会不会联网，
-        取决于它本身。不想让它自动跑，把 assistants.json 里的
-        <code>cli</code> 删掉就回到复制粘贴。</div>`
+        取决于它本身。不想让它自动跑，换成下面两种引擎之一。</div>`
       : `
-      <div class="hint">这条路就是复制粘贴：工具把逐字稿和模板拼成一段提示词，你交给 AI 助手，
-        AI 助手写好整份正文，你再贴回来。工具本身不发生任何网络请求。</div>
+      <div class="hint" style="border-color:#e0524a"><b>这台电脑上没有找到 Aki，纪要正文没人写。</b>
+        <div style="margin-top:6px">内部同事：装一个 Aki 就行，装完回这一页点
+          <b>重新检测</b>，不用配任何东西。
+          外部同事：用下面的<b>自带 API</b>，填地址、模型名、密钥三项。</div>
+        <div style="margin-top:6px">不配也能录、能出逐字稿，只是正文要你自己跑下面这三步。</div></div>
       <ol class="est">
-        <li>在右边「纪要」那一欄点<b>复制提示词</b></li>
+        <li>在右边「纪要」那一栏点<b>复制提示词</b></li>
         <li>粘给 AI 助手，等它回一份完整的 minutes.md</li>
-        <li>回到「纪要」那一欄点<b>粘回纪要</b>，贴进去即成文</li>
+        <li>回到「纪要」那一栏点<b>粘回纪要</b>，贴进去即成文</li>
       </ol>`}
     </div>
   </div>
