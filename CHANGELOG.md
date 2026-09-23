@@ -12,6 +12,23 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.14
+
+- **Two people on the same version saw a different title bar on the minutes.** The three
+  jumps in it - minutes, transcript, appendix - were hidden below 820px, a rule written for
+  a phone-shaped window that caught the app's own third column instead. Measured on a real
+  document: at 810px they were gone, at 830px they were there. So whether your copy looked
+  complete depended on how wide your window happened to be, and the person whose window was
+  narrower had every reason to think their install was broken. They now hide below 600px,
+  which no window this app runs in produces. Nothing else on that bar ever moved: copying
+  the mail body and the Chinese/English switch were there at every width.
+
+- **同一个版本，两个人看到的纪要标题栏不一样。** 栏里那三个跳转——纪要、逐字稿、附录——在 820px
+  以下会被隐藏。这条规则是为手机那种窗口写的，结果正好卡住了 app 自己右边那一栏。拿真文档量过：
+  810px 没有，830px 就有。也就是说，你的那份看起来全不全，取决于窗口恰好有多宽，而窗口窄的那个人
+  完全有理由认为自己装坏了。现在改成 600px 以下才隐，而这个 app 不会出现这么窄的窗口。那一栏上其余的东西
+  从来没动过：复制邮件正文和中文 / English 切换在任何宽度下都在。
+
 ## v2.4.13
 
 - **On an Amazon machine the minutes now write themselves, with nothing to paste.** The tool

@@ -331,11 +331,17 @@ code{background:var(--pane-3);padding:1px 5px;border-radius:3px;font:12px var(--
  border-radius:var(--r);margin-bottom:8px}
 .hint{font-size:12px;color:var(--faint);margin:0 0 12px}
 @media (max-width:820px){.wrap{padding:12px 10px 96px}.sheet{padding:22px 18px}
- .rail nav{display:none}.turn{grid-template-columns:1fr;gap:6px}
+ .turn{grid-template-columns:1fr;gap:6px}
  .turn .bd{padding-left:12px}
  body.pair .tx .turn{grid-template-columns:1fr}
  body.pair .turn .o+.z{margin-top:7px;padding:7px 0 0;border:none;
   border-top:1px dotted var(--line)}}
+/* The three jumps used to disappear below 820px, which was written for a phone-shaped
+   window and caught the app's own third column instead: at 810px they were display:none
+   and at 830px they were not, so two people on the same version saw different title bars
+   and one of them reasonably concluded their copy was broken. Measured on a real
+   document, the bar still has room at 600px. */
+@media (max-width:600px){.rail nav{display:none}}
 /* Scrollbars, checkboxes and native popups are drawn by the browser and default to
    the light palette; this is the one declaration that tells it otherwise. */
 :root{color-scheme:dark}
