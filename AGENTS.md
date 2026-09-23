@@ -71,11 +71,37 @@ points at it; so does the `staging_dir` in `%LOCALAPPDATA%\MinutesDesk\config.js
 
 ```bash
 git pull
-python install.py            # tops up; add --no-model if the model is already there
+python install.py --no-seed  # tops up; --no-seed because the calendar was already read
 .venv\Scripts\python.exe mmt\llm.py --ping
 ```
 
-That last command is the point of the update on an internal machine, so run it and do not
+`--no-seed` is not optional here: without it `install.py` reads the calendar again, and an
+update has no business doing that. Add `--no-model` as well if you want to save the minute
+it spends confirming the model is still cached.
+
+If the copy on the machine was unpacked from a ZIP rather than cloned, `git pull` will say
+it is not a repository. Do not clone a fresh copy next to it and do not delete the old one:
+`.venv`, and possibly recordings, live inside it. Unpack the current ZIP somewhere
+temporary and copy it over the top, which replaces the program files and leaves everything
+else alone:
+
+```powershell
+$d = "<the existing folder>"
+Invoke-WebRequest "https://github.com/DanielWCN/minutes-desk/archive/refs/heads/main.zip" -OutFile "$env:TEMP\md.zip"
+Remove-Item "$env:TEMP\minutes-desk-main" -Recurse -Force -ErrorAction SilentlyContinue
+Expand-Archive "$env:TEMP\md.zip" -DestinationPath $env:TEMP -Force
+robocopy "$env:TEMP\minutes-desk-main" $d /E /NFL /NDL /NJH /NJS
+```
+
+robocopy because without `/PURGE` it merges and deletes nothing it was not given: checked
+on a folder made to look like a real install, and `.venv` and the recordings inside
+`sessions\` came out untouched while every program file was replaced. Read its exit code
+the way robocopy means it: 8 and above is a failure, and the 1 or 3 you will normally see
+means it copied.
+
+Then `install.py --no-seed` and the ping, exactly as above.
+
+The ping is the point of the update on an internal machine, so run it and do not
 skip it. The tool writes the minutes by driving the assistant app on this machine from a
 command line, and whether that works is the one thing nobody can know from anywhere else:
 the app answering in its own window proves it is signed in, but not that its build accepts
