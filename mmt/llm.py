@@ -1114,8 +1114,23 @@ def main() -> int:
         print(json.dumps(detect(), ensure_ascii=False, indent=2))
         return 0
     if args.ping:
-        print(json.dumps(ping(cfg), ensure_ascii=False, indent=2))
-        return 0
+        # Routed exactly like /api/engine/test, so this answers the same question the
+        # test button answers. It is also the one thing about somebody else's machine
+        # that cannot be known from here: whether their assistant really replies when
+        # it is driven from a command line. Exit code, not prose, says which.
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except Exception:                                      # noqa: BLE001
+            pass
+        r = (ping_cli() if str(cfg.get("engine") or "assistant") == "assistant"
+             else ping(cfg))
+        if r.get("ok"):
+            print("ping: ok, %ss, reply=%r" % (r.get("took"), r.get("reply")))
+        else:
+            print("ping: FAILED")
+            print("  " + str(r.get("detail") or "")[:400])
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+        return 0 if r.get("ok") else 1
     if not args.session:
         ap.error("session is required for --print-prompt / --draft / --revise")
     ses = Path(args.session)

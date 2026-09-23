@@ -69,6 +69,16 @@ generation of the tool on people's machines.
 - **助手这张卡上也加了「测试连接」。** 找到程序不等于它能用。这个按钮真的把一句话喂进去、等它回答，
   几秒就分得清「没装」「没登录」「版本不对」。本机实测 7.4 秒回「ok」。
 
+- **And the same test from a command line, for whoever sets the tool up.** `llm.py --ping`
+  drives the assistant exactly the way the minutes step drives it and exits 0 or 1. It is
+  now part of the documented update procedure, because it is the one fact about somebody
+  else's machine that cannot be known from anywhere else: the assistant answering in its
+  own window proves it is signed in, not that its build can be driven this way.
+
+- **同样的测试也能在命令行跑，给装工具的人用。** `llm.py --ping` 用和写正文完全同一条路径去调助手，
+  通了退 0，不通退 1。它已经写进更新流程，因为这是关于别人机器唯一无法从其他地方得知的事：
+  助手在自己的窗口里能回答，只证明它登录了，不证明它这个版本能被这样调。
+
 - **An eighth self-check: the minutes engine.** The seven checks all being green while the thing
   that writes the minutes was not configured is what made a half-finished result look finished.
   The new row names the engine it will actually use, and it warns rather than fails, because a

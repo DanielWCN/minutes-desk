@@ -72,11 +72,20 @@ points at it; so does the `staging_dir` in `%LOCALAPPDATA%\MinutesDesk\config.js
 ```bash
 git pull
 python install.py            # tops up; add --no-model if the model is already there
+.venv\Scripts\python.exe mmt\llm.py --ping
 ```
 
+That last command is the point of the update on an internal machine, so run it and do not
+skip it. The tool writes the minutes by driving the assistant app on this machine from a
+command line, and whether that works is the one thing nobody can know from anywhere else:
+the app answering in its own window proves it is signed in, but not that its build accepts
+being driven this way. `--ping` feeds it a real sentence and waits for the answer. Exit 0
+and a line starting `ping: ok` means the minutes will write themselves. Exit 1 prints the
+reason, and the reason is worth reading out.
+
 Close the black `Minutes Desk` console window if it is open, and tell them to double-click
-`Minutes Desk.bat` again. Then say one thing: the version now next to the logo in the title
-bar, and that `CHANGELOG.md` lists what changed.
+`Minutes Desk.bat` again. Then say two things: the version now next to the logo in the
+title bar, and whether `--ping` came back ok. `CHANGELOG.md` lists what changed.
 
 Everything the person has accumulated lives in `%LOCALAPPDATA%\MinutesDesk\` and outside
 the program directory on purpose, so an update cannot touch their config, their glossary or
@@ -150,5 +159,6 @@ cd mmt
 python firstrun.py --reseed     # harvest the calendar again
 python seed.py --dry            # show what a harvest would add, write nothing
 python lexicon.py               # what the merged glossary currently holds
-python doctor.py                # the seven self-checks, as JSON
+python llm.py --ping            # does the assistant really answer? exit 0 = yes
+python doctor.py                # the self-checks, as JSON
 ```
