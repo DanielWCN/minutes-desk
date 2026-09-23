@@ -12,6 +12,25 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.15
+
+- **The minutes title bar no longer has a width at which it drops something.** v2.4.14 moved
+  the threshold from 820px to 600px, which was the wrong shape of fix: a laptop screen, an
+  external monitor, a dragged panel border and a browser zoom all change that number, so any
+  number chosen is a promise to be wrong again later. The bar now wraps instead of hiding: one
+  row when there is room, two when there is not, and nothing is ever removed. Measured on a
+  real document at 1400, 1100, 900, 830, 810, 700, 620, 560, 480, 400 and 320 px: the jumps,
+  the language switch, the copy button and the meeting name are present at every one of them,
+  and the bar never overflows its own width. The jumps also land clear of the bar at whatever
+  height it came out at, which a hard-coded offset could not do once the bar could be two rows.
+
+- **纪要标题栏再也没有“宽度不够就藏东西”这个行为。** v2.4.14 只是把阈值从 820px 改到 600px，
+  那是错的改法：笔记本屏、外接显示器、拖动面板边框、浏览器缩放，都会改变这个数字——只要存在这个数字，
+  就是答应了以后还会错一次。现在改成折行：放得下就一行，放不下就两行，任何东西都不会被抽走。
+  拿真文档在 1400、1100、900、830、810、700、620、560、480、400、320 px 十一个宽度上都量过：
+  三个跳转、语言切换、复制按钮、会议名字一个不少，标题栏也从没溢出。跳转的落点跟着真实栏高走，
+  这是写死的偏移量做不到的——栏一旦能变两行，它就会把标题遮在后面。
+
 ## v2.4.14
 
 - **Two people on the same version saw a different title bar on the minutes.** The three

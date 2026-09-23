@@ -108,7 +108,7 @@ CSS = """
 --sans:"Segoe UI Variable Text","Segoe UI","Microsoft YaHei",-apple-system,sans-serif;
 --mono:"IBM Plex Mono","Cascadia Mono",Consolas,ui-monospace,monospace}
 *{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:60px;-webkit-text-size-adjust:100%}
+html{scroll-behavior:smooth;scroll-padding-top:calc(var(--railh,44px) + 16px);-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 var(--sans);
  -webkit-font-smoothing:antialiased}
 a{color:var(--link);text-decoration:none}
@@ -119,11 +119,20 @@ a:hover{color:var(--link)}
 ::-webkit-scrollbar-thumb{background:#2c2c33;border-radius:5px;border:2px solid var(--bg)}
 
 /* title bar: identity, jumps, and the one button that matters */
-.rail{position:sticky;top:0;z-index:20;height:44px;background:var(--pane-2);
+/* Nothing in this bar is allowed to disappear because a window is narrow. It used to
+   drop the jumps below 820px, which is roughly the width of the app's own third column,
+   so the same version looked different on a laptop and on an external monitor and the
+   person with less width had to wonder which of the two was broken. A bar that wraps
+   needs no width to be guessed at: it is one row when there is room and two when there
+   is not, at any size, at any zoom, in the app or in a browser tab. */
+.rail{position:sticky;top:0;z-index:20;min-height:44px;background:var(--pane-2);
  border-bottom:1px solid var(--line)}
-.rail .in{max-width:1180px;margin:0 auto;padding:0 12px;height:44px;display:flex;
- gap:12px;align-items:center}
-.rail .ttl{font-size:13px;font-weight:600;color:var(--ink);flex:1;min-width:0;
+.rail .in{max-width:1180px;margin:0 auto;padding:6px 12px;min-height:44px;display:flex;
+ flex-wrap:wrap;column-gap:12px;row-gap:6px;align-items:center}
+/* flex-basis, not min-width:0: a title that may shrink to nothing lets the browser keep
+   everything on one line by squeezing the name away, which trades one disappearing thing
+   for another. This way the title keeps a readable minimum and the controls wrap under it. */
+.rail .ttl{font-size:13px;font-weight:600;color:var(--ink);flex:1 1 150px;min-width:108px;
  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rail nav{display:flex;gap:2px;padding:2px;background:var(--bg);
  border:1px solid var(--line);border-radius:var(--r)}
@@ -336,12 +345,6 @@ code{background:var(--pane-3);padding:1px 5px;border-radius:3px;font:12px var(--
  body.pair .tx .turn{grid-template-columns:1fr}
  body.pair .turn .o+.z{margin-top:7px;padding:7px 0 0;border:none;
   border-top:1px dotted var(--line)}}
-/* The three jumps used to disappear below 820px, which was written for a phone-shaped
-   window and caught the app's own third column instead: at 810px they were display:none
-   and at 830px they were not, so two people on the same version saw different title bars
-   and one of them reasonably concluded their copy was broken. Measured on a real
-   document, the bar still has room at 600px. */
-@media (max-width:600px){.rail nav{display:none}}
 /* Scrollbars, checkboxes and native popups are drawn by the browser and default to
    the light palette; this is the one declaration that tells it otherwise. */
 :root{color-scheme:dark}
@@ -566,7 +569,21 @@ function mkInit(){
  document.addEventListener('mousedown',function(ev){
   if(ev.target.closest&&ev.target.closest('.mkui'))return;
   mkHide();});}
+/* The jumps land 16px under the bar whatever height the bar came out at, which is the
+   other half of letting it wrap: a hard-coded offset would put a heading behind a
+   two-row bar exactly on the narrow windows the wrapping was for. */
+function railh(){var r=document.querySelector('.rail');if(!r)return;
+ document.documentElement.style.setProperty('--railh',r.offsetHeight+'px');}
 document.addEventListener('DOMContentLoaded',()=>{
+ /* Measured once is measured wrong: on first paint the web font has not arrived, the
+    button is wider than it will be, the bar is two rows and the offset is left at a
+    height the bar no longer has. Every event that can change it recomputes it. */
+ railh();
+ addEventListener('resize',railh);
+ addEventListener('load',railh);
+ try{if(document.fonts&&document.fonts.ready)document.fonts.ready.then(railh);}catch(e){}
+ if(window.ResizeObserver){var r=document.querySelector('.rail');
+  if(r)new ResizeObserver(railh).observe(r);}
  setTheme(document.documentElement.dataset.theme||'dark');
  var d=document.body.dataset.def||'en',l=d;
  try{l=localStorage.getItem('mmt.lang')||d;}catch(e){}
