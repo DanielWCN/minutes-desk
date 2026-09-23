@@ -2681,7 +2681,12 @@ function engDraw(){
         工具把提示词从 stdin 送进去、把整份正文从 stdout 接回来，
         所以录完点一次分析，逐字稿、中英两份纪要、文档一次到位。</div>
       <div class="hint">工具自己仍然不联网；那个助手会不会联网，
-        取决于它本身。不想让它自动跑，换成下面两种引擎之一。</div>`
+        取决于它本身。不想让它自动跑，换成下面两种引擎之一。</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" onclick="engTest()">测试连接</button>
+        <span class="sub">真的把一句话喂进去、等它回答。找到程序不等于它能用：
+          没登录、或者版本不认 <code>--cli</code>，都要到这里才看得出来。</span>
+      </div>`
       : `
       <div class="hint" style="border-color:#e0524a"><b>这台电脑上没有找到 Aki，纪要正文没人写。</b>
         <div style="margin-top:6px">内部同事：装一个 Aki 就行，装完回这一页点
@@ -3375,11 +3380,33 @@ async function pollJob(){
                : '模型把两边都看过了，认为另一份不用改。'
                  + '它的结论在日志里。');
     } else if (kind === 'doc'){
+      /* This used to be green whatever came out, and the version of it that said "now go
+         paste the transcript into an assistant yourself" was shown to someone whose engine
+         had simply failed. A finished job with an empty body is a FAILED job, and the only
+         useful thing to say is which of the two things went wrong. */
       const s = ses(cur);
-      ban('ok', `逐字稿已生成 \u00b7 用了 ${j.elapsed}s`,
-          (s && s.minutes_written) ? '纪要正文也在里面，点右上「打开纪要」。'
-          : '逐字稿和事实清单已经齐了。<b>纪要正文由 AI 助手写</b>：把这个会话目录名发给 AI 助手，'
-          + 'AI 助手读逐字稿、按模板写进 minutes.md，再点一次“确认，生成文档”即可成文。');
+      const why = (j.lines || []).slice().reverse()
+        .map(l => (/"error"\s*:\s*"(.+?)"/.exec(l) || [])[1]).find(Boolean) || '';
+      // the reason is a JSON string, so its line breaks arrive as the two characters \n
+      const why1 = why.replace(/\\n/g, ' ').trim();
+      if (s && s.minutes_written)
+        ban('ok', `文档已生成 \u00b7 用了 ${j.elapsed}s`,
+            '纪要正文也在里面，点右上「打开纪要」。发出前请通读一遍：'
+            + '模型会漏掉东西，也会把话说得比会上更满。');
+      else if (E && E.can_auto)
+        ban('fail', '文档生成了，纪要正文没写成',
+            '逐字稿、人名和事实清单都在，但 <b>' + esc(E.assistant || '纪要引擎')
+            + '</b> 这一步没有返回一份能用的 minutes.md，所以正文还是空的。'
+            + (why1 ? '日志里的原因：<code>' + esc(why1) + '</code>。' : '')
+            + '常见就两种：这台机器上的 ' + esc(E.assistant || '那个助手')
+            + ' 还没登录，或者它的版本不认 <code>--cli</code>。到<b>设置 · 纪要引擎</b>点'
+            + '<b>测试连接</b>，几秒就能分清是哪一种；完整原因在上方「查看日志」的最后几行。');
+      else
+        ban('todo', `文档已生成 \u00b7 用了 ${j.elapsed}s`,
+            '逐字稿和事实清单已经齐了，但这台机器上没有可用的纪要引擎，所以正文是空的。'
+            + '内部同事到<b>设置 · 纪要引擎</b>装好 Aki 再点「重新检测」，'
+            + '之后按一次分析就会自己写；这一次也可以用「纪要」那一栏的'
+            + '<b>复制提示词</b> / <b>粘回纪要</b> 手动补。');
     }
   }
 }

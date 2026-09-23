@@ -47,6 +47,28 @@ generation of the tool on people's machines.
   还剩 40 分钟的音频要处理。现在两条音轨一起往前走，一次几分钟，结束时剩下的是几分钟而不是一整场会。
   录音一停也立刻恢复正常优先级：已经没有需要让路的东西了。音频怎么切、怎么解码都没有动，所以出来的字一样。
 
+- **A finished job with an empty body now says so in red.** The banner after "generate
+  documents" was green whatever came out of it, and the version of it shown when the body was
+  missing told you to go and paste the transcript into an assistant yourself. That is the
+  message the colleague on v2.4.12 was reading while her engine had simply never run. It is
+  now a failure, it quotes the reason out of the log, and it names the two things that are
+  actually ever wrong: the assistant on this machine is not signed in, or its version does
+  not accept `--cli`. The transcript, the names and the document are still built and kept,
+  as before.
+
+- **一份「做完了」但正文是空的，现在是红的。** 「生成文档」之后那条横幅，不管结果好坏都是绿的；
+  正文没写成时它显示的那句，还是叫你自己把逐字稿粘给 AI 助手——那正是 v2.4.12 上那位同事读到的话，
+  而她的引擎其实根本没跑起来。现在这算一次失败：横幅会把日志里的原因引出来，并且点明真正会出错的
+  只有两种情况——这台机器上的助手没登录，或者它的版本不认 `--cli`。逐字稿、人名和文档照旧生成、照旧保留。
+
+- **A test button on the assistant card too.** Finding the program is not the same as it
+  working. This one really pipes a sentence in and waits for the answer, which separates
+  "not installed" from "not signed in" from "wrong version" in a few seconds. Measured here:
+  7.4s to come back with "ok".
+
+- **助手这张卡上也加了「测试连接」。** 找到程序不等于它能用。这个按钮真的把一句话喂进去、等它回答，
+  几秒就分得清「没装」「没登录」「版本不对」。本机实测 7.4 秒回「ok」。
+
 - **An eighth self-check: the minutes engine.** The seven checks all being green while the thing
   that writes the minutes was not configured is what made a half-finished result look finished.
   The new row names the engine it will actually use, and it warns rather than fails, because a

@@ -158,8 +158,8 @@ def assistant() -> dict:
     suspicion. That reasoning was wrong in one direction and it cost real people real work:
     with no file, the tool quietly fell back to handing them a prompt to paste somewhere
     themselves, after an analysis that looked finished. Finding the program does not send it
-    anything. The sending is still gated on a click that names it (cli_ack), and that click
-    now has somewhere to happen.
+    anything: the engine card names what was found and offers a test button, the self-check
+    has a row for it, and the log shows the command line before it runs.
 
     A file that will not parse is reported rather than swallowed. A byte-order mark from
     Notepad or PowerShell's Set-Content used to be indistinguishable from "no assistant
