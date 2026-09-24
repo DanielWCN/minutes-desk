@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.5.0"
+VERSION = "2.5.1"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -811,6 +811,9 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/confirm":
             self._json(self._confirm_write(cfg, b))
 
+        elif path == "/api/roster":
+            self._json(self._roster(cfg, b))
+
         elif path == "/api/frames":
             self._json(self._frames(cfg, b))
 
@@ -1477,6 +1480,37 @@ class H(BaseHTTPRequestHandler):
             {"at": datetime.now().isoformat(timespec="seconds"), "was": {"title": was}})
         p.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"ok": True, "title": title}
+
+    def _roster(self, cfg: dict, b: dict) -> dict:
+        """The attendee list, saved before anything has been transcribed.
+
+        whois.py takes this list as the candidate names for the voices it has to put a name
+        to, so a roster corrected after the analysis has arrived too late: the names were
+        already guessed, the minutes already carry them, and the person ends up correcting
+        the same thing twice. The confirm desk refuses to save until there is a transcript,
+        and that refusal is right for what it does there - saving on that page also re-decides
+        glossary rows against the transcript. This writes one field of session.json and
+        touches nothing else, so it is safe before the recording has been read.
+        """
+        d = archive.resolve(config.staging(cfg) / str(b.get("session") or ""))
+        if not d.is_dir():
+            return {"error": "找不到该会话"}
+        live = _rec["proc"] is not None and _rec["proc"].poll() is None
+        if live and _rec.get("session") == d.name:
+            return {"error": "这一场正在录制，recorder 还在写 session.json。停止录制后再改名单"}
+        f = d / "session.json"
+        meta = _jload(f)
+        if not meta:
+            return {"error": "这一场没有 session.json，名单没有地方可以存"}
+        picked = b.get("others")
+        if isinstance(picked, list):
+            others = "; ".join(str(x).strip() for x in picked if str(x).strip())
+        else:
+            others = " ".join(str(picked or "").split())
+        meta["others"] = others
+        f.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        n = len([x for x in re.split(r"[;,\n\u3001]+", others) if x.strip()])
+        return {"ok": True, "others": others, "n": n}
 
     def _confirm_write(self, cfg: dict, b: dict) -> dict:
         name = str(b.get("session") or "")

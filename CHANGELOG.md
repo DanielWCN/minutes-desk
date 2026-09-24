@@ -12,6 +12,31 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.5.1
+
+- **The 「生成操作手册」 button was unreachable.** The card that makes a manual sat inside the
+  语音识别 stage pane, so it disappeared the moment you moved to any other stage, and the
+  header button was hidden until a manual already existed - a button you could only find
+  after you no longer needed it. The card is now a second document belonging to the whole
+  meeting: it renders below the stage panes on every stage, and the header button is always
+  there, reading 「生成操作手册」 before and 「打开手册」 after.
+- **The attendee list is confirmed before the analysis, not after.** `whois.py` takes that
+  list as the candidate names for the voices it has to put a name to, so a roster corrected
+  on the 校对确认 desk had already arrived too late: the names were guessed from the old
+  list, the minutes already carried them, and you corrected the same thing twice. The 录音
+  stage now opens with the roster: read the invitation from the calendar, drop anyone who
+  did not come, type anyone who was not invited, save. New `POST /api/roster` writes that
+  one field of `session.json` and touches nothing else, so it is safe before there is a
+  transcript. Once a transcript exists the editor steps aside, because the confirm desk can
+  then show who actually spoke and for how long.
+- **`Last, First (Legal)` read the wrong half of the name.** A directory entry like
+  `Chen, Wenjie (Oliver)` was turned into `Oliver Chen`; the bracket in that form is the
+  legal or Chinese given name, and the name the person goes by is the one already spelled
+  out, so it should have been `Wenjie Chen`. The bracket is now used only when there is no
+  given name outside it (`Zhao, (Nina)` is still `Nina Zhao`). Fixed in both places that
+  parse a name, `outlook.py` and the page. Nothing was stored, so the corrected name appears
+  as soon as the invitation is read again.
+
 ## v2.5.0
 
 - **A screen recording now becomes an operating manual, not just minutes.** Point the tool

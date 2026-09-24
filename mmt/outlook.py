@@ -77,7 +77,13 @@ def person(raw: str, me: str = "") -> str:
         return ""
     if DL.match(s):                             # pars-people-managers
         return ""
-    # "Zhang, Yinuo (Helen)" -> "Helen Zhang"; "Smith, Alex" -> "Alex Smith"
+    # "Smith, Alex" -> "Alex Smith"; "Chen, Wenjie (Oliver)" -> "Wenjie Chen".
+    # The bracket is NOT the name to use. This used to prefer it - the comment said
+    # '"Zhang, Yinuo (Helen)" -> "Helen Zhang"', on the assumption that the bracket holds
+    # the English name somebody goes by. Reported from a real directory entry, it is the
+    # other way round: the field before the bracket is what the person set as their name,
+    # and the bracket holds the legal one. So the bracket is only used when there is no
+    # given name without it, e.g. "Zhao, (Nina)" or a bare "Wu (Bella)".
     nick = ""
     m = re.search(r"\(([^)]+)\)", s)
     if m:
@@ -85,9 +91,10 @@ def person(raw: str, me: str = "") -> str:
         s = re.sub(r"\s*\([^)]*\)", "", s).strip()
     if "," in s:
         last, _, first = s.partition(",")
-        s = f"{(nick or first).strip()} {last.strip()}".strip()
-    elif nick:
-        s = nick if " " not in nick else nick
+        first = first.strip() or nick
+        s = f"{first} {last.strip()}".strip()
+    elif nick and " " not in s:
+        s = f"{nick} {s}".strip() if s else nick
     s = re.sub(r"\s+", " ", s).strip(" .;")
     if not s:
         return ""

@@ -1227,8 +1227,8 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
         <span class="f1"></span>
         <button class="btn ib" id="res_open" hidden onclick="openMinutes()" title="查看纪要">
           <svg class="ic"><use href="#i-doc"/></svg></button>
-        <button class="btn ib" id="res_sopb" hidden onclick="openSop()" title="查看操作手册">
-          <svg class="ic"><use href="#i-steps"/></svg></button>
+        <button class="btn" id="res_sopb" hidden onclick="openSop()">
+          <svg class="ic"><use href="#i-steps"/></svg><span id="res_sopt">操作手册</span></button>
         <button class="btn ib" id="res_up" hidden onclick="upSes()"
           title="上传至 OneDrive（本地仅保留索引）">
           <svg class="ic"><use href="#i-cloud"/></svg></button>
@@ -1255,6 +1255,27 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
       <div class="wb" id="wb">
         <!-- 1 录音: the evidence -->
         <div class="pn" id="pn_rec">
+          <!-- Before the analysis, not after. whois.py takes this list as the candidate
+               names for the voices it has to name, so a roster corrected on the confirm
+               desk has already arrived too late: the names were guessed from the old list
+               and the minutes already carry them. This is the same list; it is just here,
+               where you are standing when you press 语音识别. -->
+          <div class="stg" id="ros_wrap" hidden>
+            <div class="grp"><u>!</u><h4>先核一下参加会议的人</h4>
+              <i>分析会拿这份名单去认谁在说话，所以名字错了纪要就跟着错</i>
+              <span class="f1"></span>
+              <span class="msg" id="ros_msg"></span>
+              <button class="btn sm" id="ros_inv" onclick="rosInvite()">从 Outlook 读取邀请</button>
+              <button class="btn sm pri" onclick="rosSave()">保存名单</button></div>
+            <div class="chips" id="ros_chips"></div>
+            <div class="row" style="margin-top:9px">
+              <input type="text" id="ros_add" class="f1"
+                placeholder="补充或改写名字，多人用分号分隔，回车确认"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();rosAdd()}">
+              <button class="btn sm" onclick="rosAdd()">添加</button>
+            </div>
+            <div class="hint" id="ros_hint"></div>
+          </div>
           <div class="kvs" id="res_meta2"></div>
           <div class="fs" style="margin-top:12px">原始文件</div>
           <div class="fl raw" id="res_raw" style="margin-top:6px"></div>
@@ -1262,7 +1283,6 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
         <!-- 2 语音识别: the heavy step and what it produced -->
         <div class="pn" id="pn_asr" hidden>
           <div id="res_out"></div>
-          <div id="res_sop"></div>
         </div>
         <!-- 3 校对确认: the only place a person is required -->
         <div class="pn" id="pn_fix" hidden>
@@ -1320,6 +1340,11 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
         <!-- 4 纪要: the document column moves in here below 1400px -->
         <div class="pn" id="pn_doc" hidden></div>
       </div>
+      <!-- The manual is a second document, not a stage: it belongs to the whole meeting, so
+           it sits below the stages and is visible from every one of them. It lived inside
+           the 语音识别 pane, which meant that from any other stage there was no button at
+           all and nothing saying one existed. -->
+      <div id="res_sop"></div>
     </div>
   </section>
 
@@ -1440,7 +1465,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.5.0';
+const UI_VERSION = '2.5.1';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2017,16 +2042,21 @@ function oneName(s){
   }
   if (/^[a-z0-9][a-z0-9._-]*$/.test(s) && !/\s/.test(s) && s.length > 3
       && /(directs|team|managers|group|all|list)$/i.test(s)) return '';
+  /* "Smith, Alex" -> "Alex Smith"; "Chen, Wenjie (Oliver)" -> "Wenjie Chen".
+     The bracket is NOT the name to use. This used to prefer it, on the assumption that the
+     bracket holds the English name somebody goes by; reported from a real directory entry,
+     it is the other way round - the field before the bracket is what the person set as
+     their name and the bracket holds the legal one. So the bracket is only used when there
+     is no given name without it: "Zhao, (Nina)", or a bare "Wu (Bella)". */
   let nick = '';
   const p = s.match(/\(([^)]+)\)/);
   if (p){ nick = p[1].trim(); s = s.replace(/\s*\([^)]*\)/g, '').trim(); }
   if (s.includes(',')){
     const i = s.indexOf(',');
-    const last = s.slice(0, i).trim(), first = (nick || s.slice(i + 1)).trim();
+    const last = s.slice(0, i).trim(), first = (s.slice(i + 1).trim() || nick).trim();
     s = (first + ' ' + last).trim();
-  } else if (nick){
-    const w = s.split(/\s+/);
-    s = (nick + ' ' + (w.length > 1 ? w[w.length - 1] : s)).trim();
+  } else if (nick && !/\s/.test(s)){
+    s = (s ? nick + ' ' + s : nick).trim();
   }
   s = s.replace(/\s+/g, ' ').trim();
   return s.length > 1 && s.length < 48 ? s : '';
@@ -2326,6 +2356,77 @@ function mod(k, v, tx, wide){
   return `<div class="mod${wide ? ' wide' : ''}"><u>${esc(k)}</u><b class="${
     tx ? 'tx' : ''}">${esc(v)}</b></div>`;
 }
+/* ------------------------------------------------------- the roster, before the analysis
+   Same list session.json already holds, edited in the place you are standing when you press
+   語音識別. It used to be reachable only on the confirm desk, which runs after the analysis -
+   and the analysis is what reads the list, so every correction there was one round too late. */
+let ros = [], rosOf = '';
+function rosSplit(t){
+  return (t || '').split(/[;\n\u3001]+|,(?=\s*[^\s,]+\s*[,;]|\s*$)/)
+    .map(x => x.trim()).filter(Boolean);
+}
+function drawRoster(s){
+  const w = $('#ros_wrap');
+  if (!w) return;
+  // once a transcript exists the confirm desk is the right place: it can show who actually
+  // spoke and for how long, which this cannot
+  if (!s || s.lines > 0){ w.hidden = true; rosOf = ''; return; }
+  w.hidden = false;
+  if (rosOf !== s.name){
+    rosOf = s.name;
+    ros = rosSplit(s.others || '');
+    $('#ros_msg').textContent = '';
+    $('#ros_hint').textContent = '';
+    rosChips();
+  }
+}
+function rosChips(){
+  const box = $('#ros_chips');
+  if (!box) return;
+  box.innerHTML = ros.length
+    ? ros.map((n, i) => `<span class="chip"><b>${esc(n)}</b><x onclick="rosDrop(${i})"
+        title="移除">\u00d7</x></span>`).join('') + `<span class="n">${ros.length} 人</span>`
+    : '<span class="sub">还没有名单。从 Outlook 读一份，或者自己敲进去</span>';
+}
+function rosDrop(i){ ros.splice(i, 1); rosChips(); $('#ros_msg').textContent = '改了，记得保存'; }
+function rosAdd(){
+  const el = $('#ros_add'), add = parseNames(el.value);
+  if (!add.length){ el.value = ''; return; }
+  add.forEach(n => { if (!ros.some(x => x.toLowerCase() === n.toLowerCase())) ros.push(n); });
+  el.value = '';
+  rosChips();
+  $('#ros_msg').textContent = '改了，记得保存';
+}
+async function rosSave(){
+  const s = ses(cur), m = $('#ros_msg');
+  if (!s) return;
+  m.className = 'msg'; m.textContent = '保存中…';
+  const r = await api('/api/roster', {session:s.name, others:ros});
+  if (r.error){ m.className = 'msg err'; m.textContent = r.error; return; }
+  m.textContent = `已保存 ${r.n} 人`;
+  await refresh(0);
+}
+async function rosInvite(){
+  const s = ses(cur), b = $('#ros_inv'), h = $('#ros_hint'), was = b.textContent;
+  if (!s) return;
+  b.disabled = true; b.textContent = '正在读取…';
+  let r;
+  try { r = await api('/api/invite?session=' + encodeURIComponent(s.name)); }
+  catch(e){ r = {error:'请求失败：' + e}; }
+  b.disabled = false; b.textContent = was;
+  if (r.error){ h.innerHTML = `<span style="color:var(--bad)">${esc(r.error)}</span>`; return; }
+  const got = r.names || [];
+  if (!got.length){ h.textContent = r.note || '日历里没找到对应的会议'; return; }
+  let added = 0;
+  got.forEach(n => {
+    if (!ros.some(x => x.toLowerCase() === n.toLowerCase())){ ros.push(n); added++; }
+  });
+  rosChips();
+  h.textContent = `邀请里 ${got.length} 人，新增 ${added} 人`
+                + (r.matched ? ` · 对上的会议是「${r.matched}」` : '');
+  $('#ros_msg').textContent = added ? '改了，记得保存' : '名单没有变化';
+}
+
 function drawCur(){
   const card = $('#res'), prep = $('#prep'), s = ses(cur);
   const rec = !!(S && S.recording && S.recording.active);
@@ -2341,6 +2442,7 @@ function drawCur(){
   st.textContent = ST[at][0];
   st.className = 'tag ' + ST[at][1];
   drawSteps(s);
+  drawRoster(s);
 
   const nAtt = (CF && CF.session === s.name)
     ? attList().filter(n => att2[n]).length
@@ -2438,9 +2540,15 @@ async function loadSop(name){
   sopSig = null;
   drawSop();
 }
+/* One button, two states. Written, and it opens the manual; not written, and it writes it.
+   It used to be hidden until a manual existed, which is a button you can never reach. */
 function openSop(){
   const s = ses(cur);
-  if (s) window.open(url(s.name, 'sop.html'), '_blank');
+  if (!s) return;
+  if (SOP && SOP.has_html){ window.open(url(s.name, 'sop.html'), '_blank'); return; }
+  const card = $('#res_sop');
+  if (card) card.scrollIntoView({block:'nearest', behavior:'smooth'});
+  doSop();
 }
 function drawSop(){
   const host = $('#res_sop'), b = $('#res_sopb'), s = ses(cur);
@@ -2457,7 +2565,16 @@ function drawSop(){
     if (sopWant !== s.name) loadSop(s.name);
     return;
   }
-  if (b) b.hidden = !SOP.has_html;
+  if (b){
+    b.hidden = false;
+    const t = $('#res_sopt');
+    if (t) t.textContent = SOP.has_html ? '打开手册' : '生成操作手册';
+    b.title = SOP.has_html
+      ? '打开这场的操作手册'
+      : (SOP.has_video ? '把这段演示写成能照着做的步骤，每一步带画面和原话'
+                       : '这场没有录屏，手册只会有原话，没有画面');
+    b.classList.toggle('ana', !SOP.has_html);
+  }
   const sig = [SOP.session, SOP.has_md, SOP.has_html, SOP.shots, SOP.steps,
                SOP.unverified, SOP.auto].join('|');
   if (sig === sopSig) return;                 // never rebuild a card under the cursor
