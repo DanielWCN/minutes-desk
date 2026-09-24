@@ -18,6 +18,9 @@ catch(e){document.documentElement.dataset.theme='dark';}</script>
   --text:#f7f8f8; --dim:#d0d6e0; --faint:#9096a0;
   --primary:#5e6ad2; --primary-hi:#7170ff; --primary-lo:#4c56b8;
   --acc:#5ac8fa; --acc-soft:rgba(94,106,210,.16);
+  /* the operating manual, and nothing else in the app, is teal: it is a second document,
+     not a step of the minutes, and the colour says so before the label is read */
+  --sop:#0f766e; --sop-hi:#115e59; --sop-t:#5eead4; --sop-dim:rgba(20,184,166,.14);
   /* every state has exactly one text tint, so a status word is the same colour
      wherever it appears - in a lamp, in a chip, in a stage, in a message */
   --ok-t:#7ee2a0; --warn-t:#f6d97a; --bad-t:#f4a0a0; --info-t:#9ad8fb;
@@ -314,6 +317,7 @@ input[type=checkbox]{width:14px;height:14px;accent-color:var(--primary-hi);margi
   --text:#101828;--dim:#475467;--faint:#667085;
   --primary:#5158c9;--primary-hi:#4349b8;--primary-lo:#3a3fa0;
   --acc:#0369a1;--acc-soft:rgba(81,88,201,.10);
+  --sop:#0d7a70;--sop-hi:#0b665e;--sop-t:#0b5f57;--sop-dim:rgba(13,122,112,.12);
   --ok-t:#046048;--warn-t:#8a5406;--bad-t:#a31f1f;--info-t:#075985;
   --link:#3a41ab;--link-hi:#262c86;--on-acc:#ffffff;
   --edge:rgba(0,0,0,.18);
@@ -402,6 +406,24 @@ textarea:focus{outline:none;border-color:var(--primary-hi);
 .btn.ana{border-color:var(--primary-hi);color:var(--primary-hi);font-weight:600}
 .btn.ana:hover{background:var(--primary);color:#fff;border-color:var(--primary-hi)}
 [data-theme=light] .btn.ana{color:var(--primary-hi);border-color:var(--primary)}
+/* The manual is not one of the four stages and not an ordinary button. It used to wear
+   exactly the same clothes as every other control in that row, which made the single most
+   separate thing the tool produces look like a minor action. Own colour, own height, and a
+   divider in front of it so it reads as sitting outside the minutes pipeline. Outlined
+   while it is only an option; filled once the meeting has a screen recording, because then
+   the manual is the point of that recording. */
+.btn.sop{height:30px;padding:0 13px;gap:7px;font-weight:600;
+  border-color:var(--sop-t);color:var(--sop-t);background:var(--sop-dim)}
+.btn.sop:hover{background:var(--sop);border-color:var(--sop);color:#fff}
+.btn.sop.hot{background:var(--sop);border-color:var(--sop);color:#fff}
+.btn.sop.hot:hover{background:var(--sop-hi);border-color:var(--sop-hi)}
+/* the card it leads to carries the same mark, so the button and the card are one thing */
+.stg.sopx{border-color:var(--sop-t);box-shadow:var(--lift),inset 3px 0 0 var(--sop)}
+.stg.sopx>.grp u{background:var(--sop);color:#fff}
+.stg.sopx>.grp h4{color:var(--sop-t)}
+.sopsep{display:flex;align-items:center;gap:10px;margin:24px 0 0;color:var(--faint);
+  font:600 11px/1 var(--sans);letter-spacing:.08em}
+.sopsep:before,.sopsep:after{content:"";flex:1;height:1px;background:var(--line)}
 .chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 3px 0 8px;
   border-radius:11px;background:var(--pane-3);border:1px solid var(--line);
   font-size:11.5px;color:var(--text);white-space:nowrap}
@@ -937,8 +959,10 @@ body.zen .col.ses{display:none}
 [data-theme=light] .mod,[data-theme=light] .qi,[data-theme=light] .ii,
 [data-theme=light] .card{background:var(--pane);border-color:var(--line)}
 [data-theme=light] .ar label,[data-theme=light] .sw{background:var(--pane-2)}
-[data-theme=light] .btn:not(.pri):not(.dgr){background:var(--pane-2)}
-[data-theme=light] .btn:not(.pri):not(.dgr):hover{background:var(--pane-3)}
+/* .sop is excluded for the same reason .pri and .dgr are: it carries its own colour,
+   and this rule is what made the light theme paint white text on a grey panel. */
+[data-theme=light] .btn:not(.pri):not(.dgr):not(.sop){background:var(--pane-2)}
+[data-theme=light] .btn:not(.pri):not(.dgr):not(.sop):hover{background:var(--pane-3)}
 [data-theme=light] .sw button:not(.on){background:var(--pane-2);color:var(--dim)}
 [data-theme=light] .sw button:not(.on):hover{background:var(--pane-3)}
 [data-theme=light] input[type=text],[data-theme=light] textarea,
@@ -1227,7 +1251,8 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
         <span class="f1"></span>
         <button class="btn ib" id="res_open" hidden onclick="openMinutes()" title="查看纪要">
           <svg class="ic"><use href="#i-doc"/></svg></button>
-        <button class="btn" id="res_sopb" hidden onclick="openSop()">
+        <span class="gsep" id="res_sopsep" hidden></span>
+        <button class="btn sop" id="res_sopb" hidden onclick="openSop()">
           <svg class="ic"><use href="#i-steps"/></svg><span id="res_sopt">操作手册</span></button>
         <button class="btn ib" id="res_up" hidden onclick="upSes()"
           title="上传至 OneDrive（本地仅保留索引）">
@@ -1465,7 +1490,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.5.1';
+const UI_VERSION = '2.5.2';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2558,6 +2583,7 @@ function drawSop(){
   if (!s || !(s.lines > 0)){
     if (host.innerHTML) host.innerHTML = '';
     if (b) b.hidden = true;
+    const sp0 = $('#res_sopsep'); if (sp0) sp0.hidden = true;
     SOP = null; sopWant = ''; sopSig = '-';
     return;
   }
@@ -2567,13 +2593,14 @@ function drawSop(){
   }
   if (b){
     b.hidden = false;
+    const sp = $('#res_sopsep'); if (sp) sp.hidden = false;
     const t = $('#res_sopt');
     if (t) t.textContent = SOP.has_html ? '打开手册' : '生成操作手册';
     b.title = SOP.has_html
       ? '打开这场的操作手册'
       : (SOP.has_video ? '把这段演示写成能照着做的步骤，每一步带画面和原话'
                        : '这场没有录屏，手册只会有原话，没有画面');
-    b.classList.toggle('ana', !SOP.has_html);
+    b.classList.toggle('hot', !!SOP.has_video);
   }
   const sig = [SOP.session, SOP.has_md, SOP.has_html, SOP.shots, SOP.steps,
                SOP.unverified, SOP.auto].join('|');
@@ -2603,7 +2630,8 @@ function sopCard(s, P){
   const gate = P.auto ? ''
     : `<div class="hint" style="margin-top:8px">这台机器不能自己调助手：${esc(P.gate)}
        用「拿提示词」那个按钮，把提示词贴给助手，再把回来的内容粘回来。</div>`;
-  return `<div class="stg" style="margin-top:14px">
+  return `<div class="sopsep">另一份文档，不进纪要</div>
+    <div class="stg sopx" style="margin-top:10px">
     <div class="grp"><u>≡</u><h4>操作手册</h4><i>${note}</i>
       <span class="f1"></span>${tag}</div>
     ${gate}

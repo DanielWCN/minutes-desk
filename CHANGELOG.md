@@ -12,6 +12,20 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.5.2
+
+- **The manual button looked like every other button.** It was the same 26px outline in the
+  same indigo as 语音识别, sitting in the same row, which made the one thing the tool produces
+  that is not the minutes read as a minor action. It now has its own colour, teal, used
+  nowhere else in the app; its own height; and a divider in front of it, so it is visibly
+  outside the minutes pipeline rather than the next step in it. Outlined while it is only an
+  option, filled once the meeting has a screen recording, because then the manual is the
+  point of that recording. The card it leads to carries the same teal mark and a rule above
+  it reading 「另一份文档，不进纪要」, so the button and the card read as one thing.
+- Light theme: `[data-theme=light] .btn:not(.pri):not(.dgr)` was repainting any coloured
+  button grey, which would have put white text on a grey panel. `.sop` is excluded from it
+  for the same reason `.pri` and `.dgr` already were.
+
 ## v2.5.1
 
 - **The 「生成操作手册」 button was unreachable.** The card that makes a manual sat inside the
