@@ -187,4 +187,13 @@ python seed.py --dry            # show what a harvest would add, write nothing
 python lexicon.py               # what the merged glossary currently holds
 python llm.py --ping            # does the assistant really answer? exit 0 = yes
 python doctor.py                # the self-checks, as JSON
+python pagetest.py              # the shape of a rendered document; exit 0 = intact
 ```
+
+Run `pagetest.py` after touching `report.py`, `app.py` or `ui.html`. A document carries its
+own stylesheet, so a change in one of those three can be correct in the program and wrong in
+every meeting already on disk, and that is not visible from the outside. It renders a
+fixture and asserts the promises the program makes about the file it serves: the version
+stamp is where the code that reads it looks, no window width removes anything from the
+title bar, the bar may grow to two rows, and both halves carry the same version number.
+Roughly a second, nothing to install.
