@@ -40,10 +40,12 @@ import minutes as M
 # The behaviour inside the paper - selecting a sentence, marking it, drawing the
 # underline - is the document's own JavaScript, not the app's. A file rendered by an
 # older version therefore cannot be marked however new the app around it is. This stamp
-# lands on <body>; app.py compares it and re-renders a stale document before serving it,
-# so a meeting finished last week does not have to be re-saved by hand. Bump it whenever
-# the in-paper behaviour changes.
-RV = 2
+# lands twice: on <body>, and in a <meta> at the very top of the head. The meta is the one
+# app.py reads, because it reads the first few hundred bytes and <body> in a finished
+# document is 20 KB past the end of the stylesheet. app.py compares it and re-renders a
+# stale document before serving it, so a meeting finished last week does not have to be
+# re-saved by hand. Bump it whenever the in-paper behaviour or this stylesheet changes.
+RV = 3
 # Outlook throws away <style>, so anything inside the copy zone is styled inline.
 _F = "font-family:'Segoe UI',Arial,'Microsoft YaHei',sans-serif"
 # Inline styles for the pasteable sheet. Same greys as the page (Ant neutrals), but
@@ -421,7 +423,11 @@ addEventListener('message',function(e){var d=e.data||{};
  /* The shell's language switch reaches the document too, but only for a language this
     document actually has - a meeting minuted only in English stays English. */
  if(d.mmt==='lang'&&d.lang&&document.querySelector('.sheet[data-l='+d.lang+']')){setLang(d.lang);mkDraw();}
- if(d.mmt==='marks'){MK=d.list||[];mkDraw();}});
+ if(d.mmt==='marks'){MK=d.list||[];mkDraw();}
+ /* Re-measure on demand. In the app this page lives in a panel that starts hidden, and
+    neither a resize event nor a ResizeObserver arrives when that panel is finally shown -
+    measured and confirmed, not assumed. So the shell says when to look again. */
+ if(d.mmt==='railh')railh();});
 if(window.parent!==window){addEventListener('DOMContentLoaded',function(){
  var b=document.getElementById('thm');if(b)b.hidden=true;});}
 function flipTheme(){setTheme(document.documentElement.dataset.theme==='light'?'dark':'light');}
@@ -573,7 +579,11 @@ function mkInit(){
    other half of letting it wrap: a hard-coded offset would put a heading behind a
    two-row bar exactly on the narrow windows the wrapping was for. */
 function railh(){var r=document.querySelector('.rail');if(!r)return;
- document.documentElement.style.setProperty('--railh',r.offsetHeight+'px');}
+ /* Inside the app this page is an iframe in a panel that starts hidden, where every
+    height is zero. Writing that zero is worse than never measuring: the offset the
+    jumps rely on collapses to nothing and a heading lands under the bar. */
+ var h=r.offsetHeight;if(!h)return;
+ document.documentElement.style.setProperty('--railh',h+'px');}
 document.addEventListener('DOMContentLoaded',()=>{
  /* Measured once is measured wrong: on first paint the web font has not arrived, the
     button is wider than it will be, the bar is two rows and the offset is left at a
@@ -1094,6 +1104,7 @@ def main() -> int:
            if has_audio else "")
 
     doc = f"""<!doctype html><html lang="zh"><meta charset="utf-8">
+<meta name="mmt-rv" content="{RV}">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{e(title)} - Minutes</title><style>{CSS}</style>
 <script>try{{document.documentElement.dataset.theme=localStorage.getItem('mmt.theme')||'dark';}}catch(e){{document.documentElement.dataset.theme='dark';}}</script>

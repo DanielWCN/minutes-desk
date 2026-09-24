@@ -12,6 +12,50 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.4.16
+
+- **Every time you opened a set of minutes, the app rebuilt the whole document first.** It
+  was supposed to do that only for a document written by an older version, and it decides
+  by reading a version stamp out of the first few hundred bytes of the file. The stamp was
+  written onto `<body>`, which in a finished document sits about 20 KB in, on the far side
+  of the stylesheet - so the check never found it, concluded every file was old, and ran a
+  full re-render on every single open. It has been doing that since v2.2.1 without anyone
+  noticing, because the result was correct, only slow. The stamp is now also in a `<meta>`
+  on the first line of the head. Measured on a real meeting: the first open of a file
+  written by an older version still repairs it, 136 ms, and the second open is 8 ms and touches
+  nothing.
+
+- **Read together with v2.4.15, that is also why nobody has to re-generate an old meeting.**
+  A document carries its own stylesheet, so fixing the app does not fix the files already on
+  disk - but the app repairs the file it is about to show. An old meeting opened after this
+  update comes back with the title bar that wraps, and the file on disk is fixed from then on.
+
+- **The jumps land in the right place inside the app, not just in a browser tab.** The
+  document offsets its headings by the measured height of its own title bar. Inside the app
+  it lives in a panel that starts hidden, where every height is zero, and neither a resize
+  event nor a ResizeObserver arrives when that panel is finally shown - measured, not
+  assumed. It now refuses to write a zero, and the shell tells it to measure again when the
+  panel appears, the window changes shape, or the document loads. Checked at 900, 810, 700,
+  620, 560, 480, 400 and 320 px: the offset equals the real bar height at every one, through
+  one row, two rows and three.
+
+- **每次打开纪要，程序都会先把整篇文档重建一遍。** 它本来只该对旧版本写出来的文档这么做，
+  判断方式是读文件开头几百字节里的版本戳。但那个戳写在 `<body>` 上，而 `<body>` 在成品文档里
+  大约在第 20 KB，隔着整张样式表——所以这个判断从来没命中过，每个文件都被当成旧的，
+  每打开一次就整篇重渲染一次。这个行为从 v2.2.1 起一直存在，没人发现，因为结果是对的，只是慢。
+  现在版本戳也写进 head 第一行的 `<meta>` 里。拿真会议量过：旧版本写的文件第一次打开仍然会被
+  修好，136 毫秒；第二次打开 8 毫秒，什么也不动。
+
+- **和 v2.4.15 连起来看，这也是为什么旧会议不需要重新生成。** 文档自带样式表，所以修了程序
+  并不会修好磁盘上已有的文件——但程序会在把文件交出去之前把它修好。更新之后打开一个旧会议，
+  标题栏就是会折行的那一版，磁盘上那份文件从此也是好的。
+
+- **跳转在程序里也落对位置，不只是在浏览器标签页里。** 文档按自己标题栏的实测高度给标题留位。
+  在程序里它待在一个初始隐藏的面板里，那里所有高度都是 0，而面板显示出来的时候，
+  resize 事件和 ResizeObserver 都不会来——这是量出来的，不是猜的。现在它拒绝写 0，
+  由外壳在面板出现、窗口改变形状、文档加载完成时通知它重新量。在 900、810、700、620、560、
+  480、400、320 px 上都核对过：偏移量在每一个宽度上都等于真实栏高，一行、两行、三行都对。
+
 ## v2.4.15
 
 - **The minutes title bar no longer has a width at which it drops something.** v2.4.14 moved

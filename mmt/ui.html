@@ -1407,7 +1407,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.4.15';
+const UI_VERSION = '2.4.16';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -1504,6 +1504,16 @@ function pushTheme(){
 function flipTheme(){
   setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
 }
+/* The paper offsets its own headings by the height of its title bar, which is two rows
+   on a narrow column and one on a wide one. It cannot measure that itself while it sits
+   in a panel that has not been shown yet - inside an iframe neither a resize event nor a
+   ResizeObserver arrives when the panel appears, which was measured, not guessed. So the
+   shell says "look again" whenever that could have changed. */
+function pushRailh(){
+  const f = $('.docf');
+  try { if (f && f.contentWindow) f.contentWindow.postMessage({mmt:'railh'}, '*'); }
+  catch (e){}
+}
 const $ = s => document.querySelector(s);
 const hms = t => [t/3600|0, t/60%60|0, t%60|0].map(n=>String(n).padStart(2,'0')).join(':');
 const esc = s => (s??'').toString().replace(/[<>&"]/g,
@@ -1546,7 +1556,9 @@ function panes(){
   PN.forEach((s, i) => { const e = $(s); if (e) e.hidden = i !== tab; });
   const wb = $('#wb'); if (wb) wb.classList.toggle('flush', tab === 3);
   placeDoc();
+  pushRailh();
 }
+addEventListener('resize', pushRailh);
 /* The document moves; it is never duplicated. */
 function placeDoc(){
   const d = $('#coldoc'), host = WIDE() ? $('#shell') : $('#pn_doc');
@@ -3628,7 +3640,7 @@ function gutInit(){
    the iframe can load long after the switch was last touched. */
 addEventListener('message', e => {
   const d = e.data || {};
-  if (d.mmt === 'paper-ready'){ pushTheme(); pushLang(); revPush(); }
+  if (d.mmt === 'paper-ready'){ pushTheme(); pushLang(); revPush(); pushRailh(); }
   else if (d.mmt === 'flag') revAdd(d);
   else if (d.mmt === 'unflag') revDel(d.id);
 });

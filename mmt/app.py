@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.15"
+VERSION = "2.4.16"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -684,8 +684,14 @@ class H(BaseHTTPRequestHandler):
     def _doc_fresh(self, cfg: dict, base: Path, f: Path) -> Path:
         try:
             with f.open("rb") as fh:
-                head = fh.read(800).decode("utf-8", "replace")
-            m = re.search(r'data-rv="(\d+)"', head)
+                head = fh.read(4096).decode("utf-8", "replace")
+            # The stamp is in a <meta> at the top of the head. It used to be read off
+            # <body>, which in a finished document is roughly 20 KB down, past the whole
+            # stylesheet -- so the match never happened and this re-rendered the file on
+            # every single open. data-rv is still accepted so that a document written
+            # before the meta existed is recognised as old exactly once.
+            m = re.search(r'name="mmt-rv" content="(\d+)"', head) \
+                or re.search(r'data-rv="(\d+)"', head)
             if m and int(m.group(1)) >= report.RV:
                 return f
             if not (base / "minutes.md").is_file():
