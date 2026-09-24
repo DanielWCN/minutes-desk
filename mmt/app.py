@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.5.2"
+VERSION = "2.6.1"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -388,6 +388,30 @@ def _openable(cfg: dict, p: Path) -> bool:
         if p == r or r in p.parents:
             return True
     return False
+
+
+def _recycle(p: Path) -> tuple[bool, str]:
+    """Send a folder to the Windows Recycle Bin. Returns (done, why not).
+
+    A meeting is an hour of somebody's day and the row above it in the list is another
+    meeting, so deleting one goes where Windows already keeps deleted things and the
+    undo is the one the person already knows. The path travels in the environment, not
+    in the command line, because meeting folders carry titles with spaces and brackets.
+    """
+    if os.name != "nt":
+        return False, "not Windows"
+    ps = ("Add-Type -AssemblyName Microsoft.VisualBasic;"
+          "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory("
+          "$env:MMT_DEL,'OnlyErrorDialogs','SendToRecycleBin')")
+    try:
+        r = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps],
+                           env=dict(os.environ, MMT_DEL=str(p)),
+                           capture_output=True, text=True, timeout=180)
+    except Exception as exc:                                       # noqa: BLE001
+        return False, f"{type(exc).__name__}: {exc}"
+    if r.returncode == 0 and not p.exists():
+        return True, ""
+    return False, " ".join((r.stderr or r.stdout or "").split())[:300]
 
 
 # ------------------------------------------------------------------------------------- api
@@ -829,6 +853,8 @@ class H(BaseHTTPRequestHandler):
 
         elif path == "/api/rename":
             self._json(self._rename(cfg, b))
+        elif path == "/api/session/delete":
+            self._json(self._delete(cfg, b))
         elif path == "/api/minutes":
             self._json(self._minutes_write(cfg, b))
         elif path == "/api/engine/test":
@@ -1480,6 +1506,46 @@ class H(BaseHTTPRequestHandler):
             {"at": datetime.now().isoformat(timespec="seconds"), "was": {"title": was}})
         p.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"ok": True, "title": title}
+
+    def _delete(self, cfg: dict, b: dict) -> dict:
+        """Remove one meeting from this machine: the folder and everything in it.
+
+        The folder name is the primary key of a session and it is a timestamp this tool
+        wrote, so the name is checked back against the staging root rather than trusted:
+        one level down, no separators, no walking upwards. A meeting being recorded or
+        processed right now is refused instead of deleted underneath the process holding
+        it open. An archived copy on OneDrive is not touched - that is a different disk
+        and a different decision.
+        """
+        name = str(b.get("session") or "").strip()
+        if not name or "/" in name or "\\" in name or name in (".", ".."):
+            return {"error": f"名字不对：{name}"}
+        try:
+            root = config.staging(cfg).resolve()
+            d = (root / name).resolve()
+        except Exception as exc:                                   # noqa: BLE001
+            return {"error": f"{type(exc).__name__}: {exc}"}
+        if d.parent != root or not d.is_dir():
+            return {"error": "本地已经没有这一场了"}
+        live = _rec["proc"] is not None and _rec["proc"].poll() is None
+        if live and _rec.get("session") == d.name:
+            return {"error": "这一场正在录制，先停止录制"}
+        busy = [str(j.get("label") or "") for j in _jobs.values()
+                if j.get("state") == "running" and name in str(j.get("label") or "")]
+        if busy:
+            return {"error": "这一场正在后台处理，跑完再删：" + busy[0]}
+        meta = _jload(d / "session.json") or {}
+        recycled, why = _recycle(d)
+        if not recycled:
+            import shutil
+            try:
+                shutil.rmtree(d)
+            except Exception as exc:                               # noqa: BLE001
+                return {"error": f"删不掉：{type(exc).__name__}: {exc}"}
+        return {"ok": True, "session": name, "recycled": recycled,
+                "title": meta.get("title") or name,
+                "archived": bool(meta.get("archived_at") or meta.get("archived")),
+                "why": "" if recycled else why}
 
     def _roster(self, cfg: dict, b: dict) -> dict:
         """The attendee list, saved before anything has been transcribed.

@@ -32,6 +32,15 @@
     [/^输出设备切换 (\d+) 次，已自动跟随。$/, 'The output device changed $1 time(s); recording followed it automatically.'],
     [/^已从「(.+?)」(（.+?）)?读取 (\d+) 人，请取消未到场者的勾选$/,
       (m,a,b,c) => `Read ${c} name(s) from “${a}”${b ? ' ' + b.replace('（','(').replace('）',')') : ''} - untick anyone who did not attend`],
+    /* the attendee line under the confirm desk, and what the roster editor reports */
+    [/^ 人：你 \+ 勾选的 (\d+) 人 · 音频为本端、对端两轨，三人以上不标注发言人$/,
+      ' people: you + the $1 ticked · two tracks, this end and the far end; with three or more people speakers are not labelled'],
+    [/^ 人：你 \+ 勾选的 (\d+) 人$/, ' people: you + the $1 ticked'],
+    [/^邀请里 (\d+) 人，新增 (\d+) 人 · 对上的会议是「(.+)」$/,
+      'Read $1 name(s) from the invite, $2 new · matched the meeting “$3”'],
+    [/^邀请里 (\d+) 人，新增 (\d+) 人$/, 'Read $1 name(s) from the invite, $2 new'],
+    [/^已复制 (\d+)k 字，贴给助手，回来的内容用「粘贴手册」写回$/,
+      'Copied $1k characters - paste it to your assistant, then bring the answer back with “Paste a manual”'],
     [/^纪要与会人为已勾选的 $/, 'Attendees in the minutes: the ticked '],
     [/^ 人 · 音频为本端、对端两轨，三人以上不标注发言人$/,
       ' · two tracks, this end and the far end; with three or more people speakers are not labelled'],
@@ -51,6 +60,31 @@
     [/^上次实测 (.+)$/, 'Last real test $1'],
     [/^(\d+) 场 · (\d+) 场待处理$/, '$1 meetings · $1 pending'],
     [/^(\d+) 场 · (\d+) 场待处理$/, '$1 meetings · $2 pending'],
+    [/(\d+) 处待确认/g, '$1 to check'],
+    /* the roster the recognition step runs against */
+    [/^勾上了 $/, 'Ticked: '],
+    [/^ 人（你自己不用勾，纪要里始终有你）$/,
+      ' of them (you are always in the minutes, no need to tick yourself)'],
+    [/^已保存 (\d+) 人$/, 'Saved $1 name(s)'],
+    /* what the self-check lamps report, and the notes on the confirm desk */
+    [/^(\d+)\/(\d+) 已安装$/, '$1 of $2 installed'],
+    [/^(.+) · (\d+) MB 已缓存$/, '$1 · $2 MB cached'],
+    [/^(\d+) 秒实测 · 上次执行 (.+)$/, '$1 s test · last run $2'],
+    [/^按实测 (\d+) MB\/小时（纯音频），暂存盘可录约 (\d+) 小时$/,
+      'At a measured $1 MB/h (audio only) the staging disk holds about $2 h'],
+    [/^实测 (\d+) MB\/小时，录制整个桌面，包含他人共享的画面$/,
+      'A measured $1 MB/h; records the whole desktop, including what others share'],
+    [/^(\d+) 项全部通过 · 双路录音实测：(.+)$/,
+      'All $1 checks passed · two-track recording tested $2'],
+    [/^(\d+) 项全部通过$/, 'All $1 checks passed'],
+    [/^运行中 · (\d+) 个模型$/, 'Running · $1 models'],
+    [/^识别到 (\d+) 种语言：(.+)$/, 'Detected $1 languages: $2'],
+    [/^对端 (\d+) 人，(\d+) 个声音已分开，其中 (\d+) 个认出了名字（(\d+) 个来自会议字幕）$/,
+      'Far end: $1 people, $2 voices told apart, $3 of them named ($4 from the meeting captions)'],
+    [/^对端 (\d+) 人，(\d+) 个声音已分开，其中 (\d+) 个认出了名字$/,
+      'Far end: $1 people, $2 voices told apart, $3 of them named'],
+    [/^对端 (\d+) 人，还没有按人分开$/, 'Far end: $1 people, not yet told apart'],
+    [/^(\d+) 项待确认$/, '$1 to confirm'],
   ];
 
   /* -------------------------------------------------------------- phrases */
@@ -381,6 +415,194 @@
     '同步客户端会全程占用 CPU 与带宽，并可能上传不完整文件':
       'the sync client would use CPU and bandwidth the whole time and may upload incomplete files',
 
+    /* ---- the operating manual: a second document, off to the side ---- */
+    '附加': 'Add-on',
+    '操作手册已写入': 'The manual has been written',
+    '生成操作手册': 'Generate the manual',
+    '操作手册': 'Operating manual',
+    '打开手册': 'Open the manual',
+    '重新生成': 'Regenerate',
+    '未生成': 'Not generated',
+    '另一份文档，不进纪要': 'a second document, not part of the minutes',
+    '更多': 'More',
+    '收起': 'Hide',
+    '看原文 sop.md': 'Open sop.md',
+    '拿提示词': 'Copy the prompt',
+    '粘贴手册': 'Paste a manual',
+    '文件都在': 'Files are in',
+    '打开文件夹': 'Open the folder',
+    '写入并成页': 'Write it and render',
+    '把这段演示写成能照着做的步骤：每一步都带当时的屏幕和原话。':
+      'Turns this demo into steps you can follow: every step with the screen it was on and the words said.',
+    '这场只有录音没有录屏，手册只会有原话，没有画面。':
+      'This meeting has audio but no screen recording, so the manual will carry the words only, no pictures.',
+    '这台机器不能自己调助手：': 'This machine cannot drive the assistant itself: ',
+    '用「拿提示词」那个按钮，把提示词贴给助手，再把回来的内容粘回来。':
+      'Use “Copy the prompt”, paste it to your assistant, then paste the answer back.',
+    '把助手回的整份手册粘进来，从第一行的 --- 开始':
+      'Paste the whole manual the assistant gave you, starting with the --- on the first line',
+    '打开这场的操作手册': 'Open the manual for this meeting',
+    '把这段演示写成能照着做的步骤，每一步带画面和原话':
+      'Turn this demo into steps you can follow, each one with its screen and the words said',
+    '这场没有录屏，手册只会有原话，没有画面':
+      'No screen recording here, so the manual will carry the words only, no pictures',
+    '点「打开手册」就能看。': 'Press “Open the manual” to read it.',
+    '正在配画面，稍等…': 'Matching frames, one moment…',
+    '复制失败': 'Copy failed',
+
+    /* ---- the roster, on the pane a finished recording lands on ---- */
+    '先确认谁参加了这个会': 'First, confirm who was in this meeting',
+    '识别拿这份名单去认谁在说话，名单错了逐字稿上的名字就跟着错':
+      'Recognition uses this list to put names to the voices, so a wrong list means wrong names in the transcript',
+    '确认名单，开始识别': 'Confirm the list and start',
+    '只保存名单': 'Just save the list',
+    '从名单里删掉': 'Remove from the list',
+    '删除': 'Delete',
+    '上面把后来真正到会的人勾完，再开始识别':
+      'Tick the people who actually turned up, above, then start',
+    '一个人都没勾，识别就认不出对端是谁。继续？':
+      'Nobody is ticked, so the far end cannot be named. Continue?',
+    '保存名单': 'Save the list',
+    '补充漏掉的人，多人用分号分隔，回车确认':
+      'Add anyone missing; separate several with semicolons; Enter to confirm',
+    '还没有名单。从 Outlook 读一份，或者在下面敲进去':
+      'No list yet. Read one from Outlook, or type the names in below',
+    '名单没有变化': 'The list did not change',
+    '保存中': 'Saving',
+    '日历里没找到对应的会议': 'No matching meeting in the calendar',
+    '这一场正在录制，recorder 还在写 session.json。停止录制后再改名单':
+      'This meeting is recording and the recorder is still writing session.json. Stop the recording before changing the list',
+    '这一场没有 session.json，名单没有地方可以存':
+      'This meeting has no session.json, so there is nowhere to store the list',
+    '纪要与会人共': 'The minutes list',
+
+    /* ---- the self-check lamps ---- */
+    '当前': 'Now',
+    '点击查看明细': 'click for details',
+    '已缓存': 'cached',
+    '随系统默认输出': 'follows the system default output',
+    '已锁定': 'pinned',
+    '检测通过，可开始录制': 'All checks passed - you can start recording',
+    '尚未完成录音实测': 'The recording test has not been run yet',
+    '双路录音实测': 'Two-track recording test',
+    '重新实测': 'Test again',
+    '执行实测': 'Run the test',
+    '尚未执行': 'not run yet',
+    '录完点一次分析，正文自己写好': 'press Analyse once after recording and the body writes itself',
+
+    /* ---- starting a recording, and importing one ---- */
+    '邀请了但不会来的，现在点名字上的 × 去掉最省事':
+      'if somebody was invited but will not come, the quickest fix is the × on the name',
+    '已经有录好的文件': 'Already have a recording',
+    'Zoom、Teams、OBS 录的都行。文件留在原处，不会被移动或删除。':
+      'Zoom, Teams, OBS - any of them. The file stays where it is; nothing is moved or deleted.',
+    '只有一条混在一起的音轨，所以分不出谁在说话 —— 手册不受影响，逐字稿不标发言人':
+      'it carries one mixed track, so who said what cannot be told apart: the manual is unaffected, the transcript carries no speaker names',
+    '打开 Windows 的选文件窗口': 'Open the Windows file picker',
+    '选文件…': 'Choose a file…',
+    '这段录的是什么': 'What is this a recording of',
+    '留空就用文件名': 'Leave it empty to use the file name',
+    '例如 Utilization Console 排查步骤': 'e.g. Utilization Console troubleshooting steps',
+    '导入并生成手册': 'Import and write the manual',
+    '导入中，转写一小时的录制大约十分钟，这一页可以不管它':
+      'Importing. An hour of recording takes about ten minutes to transcribe; you can leave this page',
+    '正在私密段：录屏已暂停，两条轨的话都不进逐字稿':
+      'In a private stretch: screen capture is paused and neither track reaches the transcript',
+    '进入私密段：录屏暂停，这段里你和对方的话都不进逐字稿，原始录音还在。再点一下结束':
+      'Start a private stretch: screen capture pauses and nothing said on either side reaches the transcript; the raw recording continues. Press again to end it',
+    '重新转写两路音频，已有确认结果保留':
+      'Transcribe both tracks again; what you already confirmed is kept',
+
+    /* ---- the confirm desk ---- */
+    '记下这一页：与会人的勾选、名字的改写、会议名称、词语的决定。不生成文档':
+      'Write this page down: the attendee ticks, the corrected names, the meeting name, the word decisions. No document is produced',
+    '只把这一页记下来：与会人的勾选、会议名称、词语的决定。不重新生成任何文档':
+      'Write down this page only: the attendee ticks, the meeting name, the word decisions. Nothing is regenerated',
+    '保存这一页': 'Save this page',
+    '你自己。纪要的与会人里始终有你；名字要改请去设置':
+      'You. The minutes always list you; to change the name go to Settings',
+    '已全部确认': 'All confirmed',
+    '中英混说时个别词会被判为另一种语言，通常不影响纪要。':
+      'When Chinese and English are mixed the odd word is read as the other language; it rarely affects the minutes.',
+    '其中会议字幕给出的名字不是推断：字幕显示名字的时刻，正是那个声音在说话的时刻。':
+      'The names the meeting captions gave are not guesses: the moment a caption shows a name is the moment that voice is speaking.',
+    '对端是一路混合音频，所以名字不是靠声纹，而是靠会上人们互相怎么称呼推出来的：':
+      'The far end is one mixed track, so the names come not from voiceprints but from how people addressed each other:',
+    '认不出来的留作「Speaker 编号」，只是推测的会标上问号。':
+      'anyone not recognised stays as “Speaker N”, and a guess is marked with a question mark.',
+    '在纸上划选任意一句，就会跳出「这里有问题」':
+      'Select any sentence on the paper and “something is wrong here” appears',
+
+    /* ---- settings: folders, captions, engines ---- */
+    '会议归档至此': 'Meetings are archived here',
+    '导入的录制放哪': 'Where imported recordings go',
+    'Zoom、Teams、OBS 导进来的走这里，':
+      'Recordings brought in from Zoom, Teams or OBS go here,',
+    '跟会议分开。留空就跟会议放一起':
+      'kept apart from meetings. Leave it empty and they sit with the meetings',
+    '对端是一路混合音频，名字只能靠会上互相的称呼推断；Zoom 或 Slack 的字幕面板开着的时候，':
+      'The far end is one mixed track, so names can only be inferred from how people addressed each other; with the Zoom or Slack caption panel open,',
+    '名字直接来自会议名单，不必推断。只取名字和时间，文字仍然用本机识别的逐字稿':
+      'the names come straight from the meeting list, with nothing to infer. Only names and times are taken; the words still come from the transcript made on this machine',
+    '自动写正文': 'writes the body itself',
+    '找到': 'Found',
+    '，但不能自动调用': ', but it cannot be called automatically',
+    '没找到 Aki': 'Aki not found',
+    '录完点一次分析，逐字稿、纪要、文档一次到位':
+      'press Analyse once after recording and the transcript, the minutes and the document all arrive together',
+    '正文写不出来，只能自己复制粘贴':
+      'the body cannot be written here, so it is copy and paste',
+    '就在这台电脑上': 'is on this machine',
+    '，工具自己找到的，不需要配置任何东西':
+      ', found by the tool itself, with nothing to configure',
+    '，assistants.json 里指定的': ', named in assistants.json',
+    '工具把提示词从 stdin 送进去、把整份正文从 stdout 接回来，':
+      'The tool feeds it the prompt on stdin and takes the whole body back from stdout,',
+    '所以录完点一次分析，逐字稿、中英两份纪要、文档一次到位。':
+      'so one press of Analyse after recording gives the transcript, the minutes in both languages, and the document.',
+    '工具自己仍然不联网；那个助手会不会联网，':
+      'The tool itself still does not go online; whether that assistant does',
+    '取决于它本身。不想让它自动跑，换成下面两种引擎之一。':
+      'is up to the assistant. If you would rather it did not run on its own, pick one of the two engines below.',
+    '真的把一句话喂进去、等它回答。找到程序不等于它能用：':
+      'Feeds it a real sentence and waits for the answer. Finding the program is not proof it works:',
+    '没登录、或者版本不认': 'not signed in, or a build that does not accept',
+    '，都要到这里才看得出来。': ' - only this test shows it.',
+    '这台电脑上没有找到 Aki，纪要正文没人写。':
+      'No Aki on this machine, so nobody writes the body of the minutes.',
+    '内部同事：装一个 Aki 就行，装完回这一页点':
+      'Inside Amazon: install Aki, come back to this page and press',
+    '，不用配任何东西。': '; nothing else to configure.',
+    '外部同事：用下面的': 'Outside: use',
+    '，填地址、模型名、密钥三项。': ' below and fill in the address, the model name and the key.',
+    '不配也能录、能出逐字稿，只是正文要你自己跑下面这三步。':
+      'Recording and transcription work without any of this; only the body then takes the three steps below.',
+    '质量接近云端': 'close to cloud quality',
+    '实用的下限': 'the practical floor',
+    '界面语言 / Interface language': 'Interface language / 界面语言',
+    '你': 'You',
+
+    /* ---- right-click on a meeting ---- */
+    '删除这一场？': 'Delete this meeting?',
+    '删除这一场': 'Delete this meeting',
+    '录音、逐字稿、纪要、操作手册，整个文件夹都会删掉。':
+      'The recording, the transcript, the minutes, the manual - the whole folder goes.',
+    '先进回收站，删错了还能从回收站找回来。':
+      'It goes to the Recycle Bin first, so a mistake can be undone from there.',
+    '删不掉': 'Could not delete it',
+    '没有回应': 'no answer',
+    '已删除': 'Deleted',
+    '整个文件夹已经进了回收站，删错了从那里找回来。':
+      'The whole folder is in the Recycle Bin; restore it from there if this was a mistake.',
+    '文件夹已经删掉了（回收站用不上，是直接删的）。':
+      'The folder is gone - the Recycle Bin was not available, so it was deleted outright.',
+    'OneDrive 上归档的那一份没有动。': 'The copy archived on OneDrive has not been touched.',
+    '本地已经没有这一场了': 'This meeting is no longer on this machine',
+    '这一场正在录制，先停止录制': 'This meeting is recording - stop the recording first',
+    '这一场正在后台处理，跑完再删':
+      'This meeting is being processed in the background; delete it once that finishes',
+    '名字不对': 'Bad name',
+
     /* ---- logs, errors, versions ---- */
     '查看日志': 'View log',
     '收起日志': 'Hide log',
@@ -528,6 +750,8 @@
      count rather than concatenate. */
   const pl = (sg, p) => (m, d) => d + ' ' + (+d === 1 ? sg : p);
   const POST = [
+    [/([?\d]+) 步(?!骤)/g, pl('step', 'steps')],
+    [/(\d+) 张画面/g, pl('frame', 'frames')],
     [/(\d+) 场/g, pl('meeting', 'meetings')],
     [/(\d+) 段/g, pl('segment', 'segments')],
     [/(\d+) 行/g, pl('line', 'lines')],
@@ -539,6 +763,7 @@
     [/(\d+) 张/g, pl('frame', 'frames')],
     [/(\d+) 帧/g, '$1 fps'],
     [/(\d+) 分钟/g, '$1 min'],
+    [/(\d+) 分 (\d+) 秒/g, '$1m $2s'],
     [/(\d+) 秒/g, '$1 s'],
     [/(\d+) 条/g, pl('item', 'items')],
     [/、/g, ', '], [/，/g, ', '], [/。/g, '. '], [/；/g, '; '],

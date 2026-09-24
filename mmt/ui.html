@@ -417,13 +417,41 @@ textarea:focus{outline:none;border-color:var(--primary-hi);
 .btn.sop:hover{background:var(--sop);border-color:var(--sop);color:#fff}
 .btn.sop.hot{background:var(--sop);border-color:var(--sop);color:#fff}
 .btn.sop.hot:hover{background:var(--sop-hi);border-color:var(--sop-hi)}
-/* the card it leads to carries the same mark, so the button and the card are one thing */
+/* The add-on mark. It is the label that says this is not a step of the minutes, and it is
+   on both the button and the strip so the two read as one thing. currentColor, so it works
+   filled or outlined, dark or light, without a second set of tokens. */
+.xt{flex:none;border:1px solid currentColor;border-radius:3px;padding:0 4px;
+  font:600 9px/13px var(--sans);letter-spacing:.06em;opacity:.9;color:var(--sop-t)}
+.btn.sop .xt{color:inherit}
+/* This strip is the last thing in the work column, below the button that ends the confirm
+   desk. A tall panel there pushed 「确认，生成纪要」 up the page and read as part of it, so
+   closed it is one row and only the second-order controls fold away. */
+#res_sop{flex:none;max-height:52vh;overflow:auto;padding:0 16px}
+.sopbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;min-height:38px;
+  margin:8px 0 10px;padding:5px 12px;border:1px solid var(--sop-t);border-left-width:3px;
+  border-radius:var(--r-lg);background:var(--sop-dim);box-shadow:var(--lift)}
+.sopbar>b{flex:none;font-size:12.5px;font-weight:600;color:var(--sop-t)}
+/* the subtitle is the one part that may be cut: it explains, it does not act */
+.sopbar>i{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  font-style:normal;font-size:11.5px;color:var(--faint)}
+.sopbar .msg,.sopbar .tag{flex:none}
 .stg.sopx{border-color:var(--sop-t);box-shadow:var(--lift),inset 3px 0 0 var(--sop)}
-.stg.sopx>.grp u{background:var(--sop);color:#fff}
-.stg.sopx>.grp h4{color:var(--sop-t)}
-.sopsep{display:flex;align-items:center;gap:10px;margin:24px 0 0;color:var(--faint);
-  font:600 11px/1 var(--sans);letter-spacing:.08em}
-.sopsep:before,.sopsep:after{content:"";flex:1;height:1px;background:var(--line)}
+/* ------------------------------------------------------------- right-click menu
+   A meeting is a folder on this disk. The two things you would open Explorer for -
+   look at it, get rid of it - belong on the row itself, and behind a right-click:
+   a delete sitting in the open, one row from the next meeting, is a delete that
+   happens by accident. */
+.ctxm{position:fixed;z-index:90;min-width:196px;padding:5px;
+  border:1px solid var(--line);border-radius:var(--r-lg);
+  background:var(--pane-2);box-shadow:var(--sh)}
+.ctxm>b{display:block;max-width:300px;padding:4px 9px 6px;font-size:11px;font-weight:600;
+  color:var(--faint);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ctxm button{display:flex;align-items:center;gap:8px;width:100%;height:28px;padding:0 9px;
+  border:0;border-radius:var(--r);background:none;color:var(--text);
+  font:12px/1 var(--sans);text-align:left;cursor:pointer}
+.ctxm button:hover{background:var(--pane-4)}
+.ctxm button.dgr{color:var(--bad-t)}
+.ctxm button.dgr:hover{background:var(--bad-dim)}
 .chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 3px 0 8px;
   border-radius:11px;background:var(--pane-3);border:1px solid var(--line);
   font-size:11.5px;color:var(--text);white-space:nowrap}
@@ -1088,6 +1116,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 <symbol id="i-max" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></symbol>
 <symbol id="i-min" viewBox="0 0 24 24"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></symbol>
 <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></symbol>
 <symbol id="i-play" viewBox="0 0 24 24"><path d="m6 3 14 9-14 9z" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></symbol>
 <symbol id="i-lang" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></symbol>
@@ -1253,7 +1282,8 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
           <svg class="ic"><use href="#i-doc"/></svg></button>
         <span class="gsep" id="res_sopsep" hidden></span>
         <button class="btn sop" id="res_sopb" hidden onclick="openSop()">
-          <svg class="ic"><use href="#i-steps"/></svg><span id="res_sopt">操作手册</span></button>
+          <em class="xt">附加</em><svg class="ic"><use href="#i-steps"/></svg>
+          <span id="res_sopt">操作手册</span></button>
         <button class="btn ib" id="res_up" hidden onclick="upSes()"
           title="上传至 OneDrive（本地仅保留索引）">
           <svg class="ic"><use href="#i-cloud"/></svg></button>
@@ -1280,33 +1310,41 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
       <div class="wb" id="wb">
         <!-- 1 录音: the evidence -->
         <div class="pn" id="pn_rec">
-          <!-- Before the analysis, not after. whois.py takes this list as the candidate
-               names for the voices it has to name, so a roster corrected on the confirm
-               desk has already arrived too late: the names were guessed from the old list
-               and the minutes already carry them. This is the same list; it is just here,
-               where you are standing when you press 语音识别. -->
-          <div class="stg" id="ros_wrap" hidden>
-            <div class="grp"><u>!</u><h4>先核一下参加会议的人</h4>
-              <i>分析会拿这份名单去认谁在说话，所以名字错了纪要就跟着错</i>
-              <span class="f1"></span>
-              <span class="msg" id="ros_msg"></span>
-              <button class="btn sm" id="ros_inv" onclick="rosInvite()">从 Outlook 读取邀请</button>
-              <button class="btn sm pri" onclick="rosSave()">保存名单</button></div>
-            <div class="chips" id="ros_chips"></div>
-            <div class="row" style="margin-top:9px">
-              <input type="text" id="ros_add" class="f1"
-                placeholder="补充或改写名字，多人用分号分隔，回车确认"
-                onkeydown="if(event.key==='Enter'){event.preventDefault();rosAdd()}">
-              <button class="btn sm" onclick="rosAdd()">添加</button>
-            </div>
-            <div class="hint" id="ros_hint"></div>
-          </div>
           <div class="kvs" id="res_meta2"></div>
           <div class="fs" style="margin-top:12px">原始文件</div>
           <div class="fl raw" id="res_raw" style="margin-top:6px"></div>
         </div>
         <!-- 2 语音识别: the heavy step and what it produced -->
         <div class="pn" id="pn_asr" hidden>
+          <!-- Before the analysis, not after. whois.py takes this list as the candidate
+               names for the voices it has to put a name to, so a roster corrected on the
+               confirm desk has already arrived too late: the names were decided from the old
+               list and the minutes already carry them. It used to sit on the 录音 pane, which
+               is not the pane a finished recording lands on - so nobody ever saw it, and one
+               real meeting (v2.6.1) went through naming against a six-name invite when two
+               people turned up. Ticks, not a delete cross: unticking somebody who did not
+               come has to be as easy as putting them back. -->
+          <div class="stg" id="ros_wrap" hidden>
+            <div class="grp"><u>!</u><h4>先确认谁参加了这个会</h4>
+              <i>识别拿这份名单去认谁在说话，名单错了逐字稿上的名字就跟着错</i>
+              <span class="f1"></span>
+              <span class="msg" id="ros_msg"></span>
+              <button class="btn sm" id="ros_inv" onclick="rosInvite()">从 Outlook 读取邀请</button></div>
+            <div class="att" id="ros_att"></div>
+            <div class="hint" id="ros_n"></div>
+            <div class="row" style="margin-top:9px">
+              <input type="text" id="ros_add" class="f1"
+                placeholder="补充漏掉的人，多人用分号分隔，回车确认"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();rosAdd()}">
+              <button class="btn sm" onclick="rosAdd()">添加</button>
+            </div>
+            <div class="hint" id="ros_hint"></div>
+            <div class="row" style="margin-top:12px">
+              <button class="btn ana lg" onclick="rosGo()">
+                <svg class="ic"><use href="#i-wave"/></svg>确认名单，开始识别</button>
+              <button class="btn" onclick="rosSave()">只保存名单</button>
+            </div>
+          </div>
           <div id="res_out"></div>
         </div>
         <!-- 3 校对确认: the only place a person is required -->
@@ -1490,7 +1528,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.5.2';
+const UI_VERSION = '2.6.1';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -2385,10 +2423,11 @@ function mod(k, v, tx, wide){
    Same list session.json already holds, edited in the place you are standing when you press
    語音識別. It used to be reachable only on the confirm desk, which runs after the analysis -
    and the analysis is what reads the list, so every correction there was one round too late. */
-let ros = [], rosOf = '';
+let ros = [], rosOn = {}, rosOf = '';
+/* same rule as parseNames: a text with semicolons is a semicolon list (the comma is inside
+   "Last, First"), anything else is a comma list - which is what Outlook hands us here. */
 function rosSplit(t){
-  return (t || '').split(/[;\n\u3001]+|,(?=\s*[^\s,]+\s*[,;]|\s*$)/)
-    .map(x => x.trim()).filter(Boolean);
+  return parseNames(t);
 }
 function drawRoster(s){
   const w = $('#ros_wrap');
@@ -2400,36 +2439,66 @@ function drawRoster(s){
   if (rosOf !== s.name){
     rosOf = s.name;
     ros = rosSplit(s.others || '');
+    rosOn = {};
+    // Everyone the invite named starts ticked. The invite is a list of people who were ASKED,
+    // so the ones to take off are the ones who did not turn up, and that is a shorter job.
+    ros.forEach(n => { rosOn[n] = true; });
     $('#ros_msg').textContent = '';
     $('#ros_hint').textContent = '';
     rosChips();
   }
 }
+/* Ticks, and the same ones as the confirm desk. A cross that removes a name is a one-way
+   door: untick the wrong person and the only way back is to type them in again. */
 function rosChips(){
-  const box = $('#ros_chips');
+  const box = $('#ros_att');
   if (!box) return;
   box.innerHTML = ros.length
-    ? ros.map((n, i) => `<span class="chip"><b>${esc(n)}</b><x onclick="rosDrop(${i})"
-        title="移除">\u00d7</x></span>`).join('') + `<span class="n">${ros.length} 人</span>`
-    : '<span class="sub">还没有名单。从 Outlook 读一份，或者自己敲进去</span>';
+    ? ros.map(n => `<div class="ar"><label class="${rosOn[n] ? 'on' : ''}"><input
+         type="checkbox" ${rosOn[n] ? 'checked' : ''} onchange="rosTog(${jq(n)})">
+         <span>${esc(n)}</span></label>
+         <b class="ed" title="从名单里删掉" onclick="rosDrop(${jq(n)})">删除</b></div>`).join('')
+    : '<span class="sub">还没有名单。从 Outlook 读一份，或者在下面敲进去</span>';
+  const on = ros.filter(n => rosOn[n]).length;
+  $('#ros_n').innerHTML = ros.length
+    ? `勾上了 <b>${on}</b> 人（你自己不用勾，纪要里始终有你）` : '';
 }
-function rosDrop(i){ ros.splice(i, 1); rosChips(); $('#ros_msg').textContent = '改了，记得保存'; }
+function rosTog(n){ rosOn[n] = !rosOn[n]; rosChips(); $('#ros_msg').textContent = ''; }
+function rosDrop(n){
+  ros = ros.filter(x => x !== n);
+  delete rosOn[n];
+  rosChips();
+}
 function rosAdd(){
   const el = $('#ros_add'), add = parseNames(el.value);
   if (!add.length){ el.value = ''; return; }
-  add.forEach(n => { if (!ros.some(x => x.toLowerCase() === n.toLowerCase())) ros.push(n); });
+  add.forEach(n => {
+    if (!ros.some(x => x.toLowerCase() === n.toLowerCase())){ ros.push(n); rosOn[n] = true; }
+  });
   el.value = '';
   rosChips();
-  $('#ros_msg').textContent = '改了，记得保存';
 }
-async function rosSave(){
+function rosPick(){ return ros.filter(n => rosOn[n]); }
+async function rosSave(quiet){
   const s = ses(cur), m = $('#ros_msg');
-  if (!s) return;
+  if (!s) return false;
   m.className = 'msg'; m.textContent = '保存中…';
-  const r = await api('/api/roster', {session:s.name, others:ros});
-  if (r.error){ m.className = 'msg err'; m.textContent = r.error; return; }
+  const r = await api('/api/roster', {session:s.name, others:rosPick()});
+  if (r.error){ m.className = 'msg err'; m.textContent = r.error; return false; }
   m.textContent = `已保存 ${r.n} 人`;
-  await refresh(0);
+  if (!quiet) await refresh(0);
+  return true;
+}
+/* One press: the list you just ticked is saved, and then the analysis runs against it. The
+   two used to be a save button here and a run button somewhere else, which is how a meeting
+   gets analysed against a list nobody confirmed. */
+async function rosGo(){
+  // window.confirm is outside the page, so the observer never sees it: translate by hand
+  const L = x => (lang === 'en' && window.MMT_I18N) ? MMT_I18N.tr(x) : x;
+  if (!rosPick().length && ros.length
+      && !confirm(L('一个人都没勾，识别就认不出对端是谁。继续？'))) return;
+  if (!await rosSave(true)) return;
+  doAnalysis();
 }
 async function rosInvite(){
   const s = ses(cur), b = $('#ros_inv'), h = $('#ros_hint'), was = b.textContent;
@@ -2444,12 +2513,12 @@ async function rosInvite(){
   if (!got.length){ h.textContent = r.note || '日历里没找到对应的会议'; return; }
   let added = 0;
   got.forEach(n => {
-    if (!ros.some(x => x.toLowerCase() === n.toLowerCase())){ ros.push(n); added++; }
+    if (!ros.some(x => x.toLowerCase() === n.toLowerCase())){ ros.push(n); rosOn[n] = true; added++; }
   });
   rosChips();
   h.textContent = `邀请里 ${got.length} 人，新增 ${added} 人`
                 + (r.matched ? ` · 对上的会议是「${r.matched}」` : '');
-  $('#ros_msg').textContent = added ? '改了，记得保存' : '名单没有变化';
+  $('#ros_msg').textContent = '';
 }
 
 function drawCur(){
@@ -2538,9 +2607,7 @@ function drawCur(){
       + `<div class="row" style="margin-top:12px">${acts.join('')}</div>`
     : `<div class="grp"><u>\u2014</u><h4>产出</h4><i>暂无</i></div>
        <div class="empty" style="padding:0 0 10px"><b>录制已完成，尚未转写</b>
-         <div class="row" style="margin-top:10px;justify-content:center">
-           <button class="btn ana lg" onclick="doAnalysis()"><svg class="ic"><use href="#i-wave"/></svg>语音识别</button>
-         </div></div>
+         <div class="sub" style="margin-top:6px">上面把后来真正到会的人勾完，再开始识别</div></div>
        <div class="row" style="margin-top:12px">${acts.join('')}</div>`;
   if (html !== outHtml){ outHtml = html; $('#res_out').innerHTML = html; }
   drawSop();
@@ -2557,7 +2624,7 @@ let outHtml = null;
    State is read once per session, not on the 3 s heartbeat: it asks the server whether the
    assistant on this machine can be driven, and that answer does not change while you look
    at it. */
-let SOP = null, sopWant = '', sopSig = null;
+let SOP = null, sopWant = '', sopSig = null, sopMoreOn = false;
 async function loadSop(name){
   sopWant = name;
   const r = await api('/api/sop?session=' + encodeURIComponent(name));
@@ -2619,10 +2686,11 @@ function sopCard(s, P){
   const note = P.has_video
     ? '把这段演示写成能照着做的步骤：每一步都带当时的屏幕和原话。'
     : '这场只有录音没有录屏，手册只会有原话，没有画面。';
-  const mk = `<button class="btn ${has ? '' : 'pri '}sm" onclick="doSop()">${
+  const mk = `<button class="btn sop sm" onclick="doSop()">${
     has ? '重新生成' : '生成操作手册'}</button>`;
   const open = has
-    ? `<a class="btn pri sm" target="_blank" href="${url(s.name, 'sop.html')}">打开手册</a>`
+    ? `<a class="btn sop hot sm" target="_blank" href="${
+        url(s.name, 'sop.html')}">打开手册</a>`
     : '';
   const md = has
     ? `<a class="btn sm" target="_blank" href="${url(s.name, 'sop.md')}">看原文 sop.md</a>`
@@ -2630,24 +2698,36 @@ function sopCard(s, P){
   const gate = P.auto ? ''
     : `<div class="hint" style="margin-top:8px">这台机器不能自己调助手：${esc(P.gate)}
        用「拿提示词」那个按钮，把提示词贴给助手，再把回来的内容粘回来。</div>`;
-  return `<div class="sopsep">另一份文档，不进纪要</div>
-    <div class="stg sopx" style="margin-top:10px">
-    <div class="grp"><u>≡</u><h4>操作手册</h4><i>${note}</i>
-      <span class="f1"></span>${tag}</div>
-    ${gate}
-    <div class="row" style="margin-top:9px">
-      ${open}${mk}${md}
-      <button class="btn txt q sm" onclick="sopPrompt()">拿提示词</button>
-      <button class="btn txt q sm" onclick="sopPasteStart()">粘贴手册</button>
-      <span class="f1"></span><span class="msg" id="sopmsg"></span>
+  return `<div class="sopbar">
+      <span class="xt">附加</span><b>操作手册</b><i>另一份文档，不进纪要</i>
+      <span class="f1"></span>${tag}<span class="msg" id="sopmsg"></span>
+      ${open}${mk}
+      <button class="btn txt q sm" id="sopmoreb" onclick="sopMore()">${
+        sopMoreOn ? '收起' : '更多'}</button>
     </div>
-    <div class="row" style="margin-top:8px;align-items:center">
-      <span class="sub">文件都在</span>
-      <code class="sub" style="word-break:break-all">${esc(s.path)}</code>
-      <button class="btn txt q sm" onclick="reveal('${
-        esc(s.path).replace(/\\/g, '\\\\')}')">打开文件夹</button>
-    </div>
-    <div id="soppw"></div></div>`;
+    <div class="stg sopx" id="sopx_more"${sopMoreOn ? '' : ' hidden'}>
+      <div class="sub">${note}</div>
+      ${gate}
+      <div class="row" style="margin-top:9px">
+        ${md}
+        <button class="btn txt q sm" onclick="sopPrompt()">拿提示词</button>
+        <button class="btn txt q sm" onclick="sopPasteStart()">粘贴手册</button>
+      </div>
+      <div class="row" style="margin-top:8px;align-items:center">
+        <span class="sub">文件都在</span>
+        <code class="sub" style="word-break:break-all">${esc(s.path)}</code>
+        <button class="btn txt q sm" onclick="reveal('${
+          esc(s.path).replace(/\\/g, '\\\\')}')">打开文件夹</button>
+      </div>
+      <div id="soppw"></div></div>`;
+}
+/* The drawer holds what is second-order: what the manual will contain, the two paste
+   buttons, and where the files are. The one action stays on the bar. */
+function sopMore(force){
+  sopMoreOn = force ? true : !sopMoreOn;
+  const w = $('#sopx_more'), b = $('#sopmoreb');
+  if (w) w.hidden = !sopMoreOn;
+  if (b) b.textContent = sopMoreOn ? '收起' : '更多';
 }
 /* Minutes of video to decode, then the assistant writes, then the page renders: a job with
    a log, like transcription, not a request the page sits and waits on. */
@@ -2671,6 +2751,7 @@ async function sopPrompt(){
     : '复制失败';
 }
 function sopPasteStart(){
+  sopMore(1);
   const w = $('#soppw');
   if (!w) return;
   w.innerHTML = `<div class="row" style="margin-top:10px"><span class="sub">
@@ -3879,6 +3960,7 @@ function card(s){
          renStart('${esc(s.name)}')"><svg class="ic sm"><use href="#i-edit"/></svg></span>`;
   return `<a class="si${s.state === 'recording' ? ' rec' : ''}${arc ? ' arc' : ''}${
       s.name === cur ? ' on' : ''}" data-n="${esc(s.name)}" onclick="pick('${esc(s.name)}')"
+      oncontextmenu="ctxOpen(event, '${esc(s.name)}')"
       title="${esc(s.title || s.name)}">
     ${nm}
     <span class="r"><s>${tm ? tm[1] + ':' + tm[2] : '--:--'}${
@@ -3949,10 +4031,70 @@ async function doArchive(name){
 }
 async function reveal(p){ if (p) await api('/api/open', {path:p}); }
 
+/* ---- right-click on a meeting ------------------------------------------------
+   Two items, because they are the two questions the list cannot answer in place:
+   where is this on disk, and make it not be. The delete goes through the Recycle
+   Bin, so the confirm can be a confirm instead of an interrogation. */
+let ctxAt = null;
+function ctxEl(){
+  let m = $('#ctxm');
+  if (!m){
+    m = document.createElement('div');
+    m.id = 'ctxm'; m.className = 'ctxm'; m.hidden = true;
+    document.body.appendChild(m);
+  }
+  return m;
+}
+function ctxOpen(ev, n){
+  ev.preventDefault(); ev.stopPropagation();
+  const s = ses(n);
+  if (!s) return;
+  ctxAt = n;
+  const m = ctxEl();
+  m.innerHTML = `<b>${esc(nameOfSes(s))}</b>
+    <button onclick="ctxReveal()"><svg class="ic sm"><use href="#i-folder"/></svg>
+      打开文件夹</button>
+    <button class="dgr" onclick="ctxDel()"><svg class="ic sm"><use href="#i-trash"/></svg>
+      删除这一场</button>`;
+  m.hidden = false;
+  m.style.left = '0px'; m.style.top = '0px';
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(4, Math.min(ev.clientX, innerWidth - r.width - 6)) + 'px';
+  m.style.top = Math.max(4, Math.min(ev.clientY, innerHeight - r.height - 6)) + 'px';
+}
+function ctxHide(){ const m = $('#ctxm'); if (m) m.hidden = true; ctxAt = null; }
+function ctxReveal(){ const s = ses(ctxAt); ctxHide(); if (s) reveal(s.path); }
+async function ctxDel(){
+  const s = ses(ctxAt);
+  ctxHide();
+  if (!s) return;
+  // window.confirm is outside the page, so the observer never sees it: translate by hand
+  const L = x => (lang === 'en' && window.MMT_I18N) ? MMT_I18N.tr(x) : x;
+  const q = [L('删除这一场？'), nameOfSes(s), s.path,
+             L('录音、逐字稿、纪要、操作手册，整个文件夹都会删掉。'),
+             L('先进回收站，删错了还能从回收站找回来。')].join('\n\n');
+  if (!confirm(q)) return;
+  const r = await api('/api/session/delete', {session: s.name});
+  if (!r || r.error){ ban('fail', '删不掉', (r && r.error) || '没有回应'); return; }
+  if (cur === s.name){ cur = null; SOP = null; sopWant = ''; sopSig = null; docSig = null; }
+  ban('ok', '已删除 ' + (r.title || s.name),
+      (r.recycled ? '整个文件夹已经进了回收站，删错了从那里找回来。'
+                  : '文件夹已经删掉了（回收站用不上，是直接删的）。')
+      + (r.archived ? ' OneDrive 上归档的那一份没有动。' : ''));
+  await refresh(0);
+  drawCur(); drawState();
+}
+
 // =================================================================== wiring
 $('#r_others').addEventListener('input', readAtt);
 $('#r_video').addEventListener('change', e => e.target.dataset.touched = '1');
-document.addEventListener('keydown', e => { if (e.key === 'Escape') popHide(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape'){ popHide(); ctxHide(); } });
+document.addEventListener('mousedown', e => {
+  const m = $('#ctxm');
+  if (m && !m.hidden && !m.contains(e.target)) ctxHide();
+}, true);
+window.addEventListener('blur', ctxHide);
+document.addEventListener('scroll', ctxHide, true);
 document.addEventListener('mousedown', e => {
   if (!popOn()) return;
   if ($('#pop').contains(e.target) || e.target.closest('.lamp') || e.target.closest('#topst')) return;

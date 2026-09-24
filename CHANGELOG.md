@@ -12,6 +12,69 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.6.1
+
+- **The captions were being read and then thrown away.** A real 17-minute meeting with
+  captions on the whole time came out with every far-end line labelled `Others` or
+  `Speaker 6`. 215 caption lines had been captured and 205 of them carried a name - glued
+  to the front of the sentence, "Wenjie Chen, Cool, cool.", because the accessibility
+  layer joins a container's children with ", ". The repair that puts those back together
+  only ran when NOT ONE line in the file carried a name, and ten did: the meeting client
+  had drawn its own activity log in the same shape ("6:00 PM - meeting started" reads as a
+  speaker called "6"). Ten junk lines kept the repair switched off for the other 205, and
+  then pinned two voice clusters to a person called "6". Now: a client's activity log is
+  dropped before anything is counted, a "name" that is a timestamp fragment is not a name,
+  the repair runs whenever names are a minority rather than absent, and whatever is still
+  anonymous is matched against the meeting's own roster - so "Wenjie Chen, Cool, cool."
+  is settled by the list of people in the room and nothing is guessed. On that meeting:
+  10 usable caption lines became 80, the measured clock offset went from a nonsensical
+  -102.6 s to 2.1 s, and all three far-end voices are now named with high confidence,
+  from the captions alone, with no model call at all. Every existing meeting redoes its
+  naming on the next press of 生成文档; the recording is not re-read.
+- **Confirm who was in the meeting before the analysis, not after.** The roster editor
+  added in v2.5.2 sat on the 录音 pane, which is not the pane a finished recording lands
+  on - so nobody ever saw it, and the analysis kept running against the raw Outlook invite.
+  It now sits at the top of 语音识别, where you land when you press 停止录制, with a tick
+  beside every name and one button: 「确认名单，开始识别」 saves the list and starts.
+  Ticks rather than a delete cross, because unticking somebody who did not turn up has to
+  be as easy as putting them back.
+
+## v2.6.0
+
+- **Right-click a meeting in the list.** Two things the list could not answer in place:
+  where this is on disk, and make it not be. 「打开文件夹」 opens the session folder in
+  Explorer; 「删除这一场」 deletes it - the recording, the transcript, the minutes, the
+  manual, the whole folder. It goes to the Windows Recycle Bin, so a wrong click is
+  undone the way every other wrong delete on this machine is undone, and the confirm can
+  stay a confirm instead of an interrogation. Behind a right-click on purpose: a delete
+  sitting in the open, one row above another meeting, is a delete that happens by accident.
+- The delete refuses rather than damages: a meeting being recorded, or one a background
+  job is still processing, is left alone and says why. The folder name is checked back
+  against the staging root - one level down, no separators, no walking upwards - so the
+  only thing this endpoint can ever remove is a meeting folder this tool wrote. A copy
+  already archived to OneDrive is not touched, and the answer says so.
+
+## v2.5.3
+
+- **The manual strip was a card, and it pushed the one button that ends the confirm desk
+  off the bottom of the screen.** It sat below the work column, 137px tall, under the
+  sticky row that holds 「确认并生成纪要」 - so the action you came to press was floating in
+  the middle of the window with a teal panel beneath it. It is one 42px row now: the
+  `附加` mark, the name, one line saying what it is, the state, and the button. What the
+  manual will contain, the two paste buttons and the folder path moved behind 「更多」,
+  which opens in place and is forced open when you press 「粘贴手册」, because the box you
+  paste into lives inside it.
+- The mark says so in words: an `附加` / `Add-on` pill in front of the label, on the header
+  button and on the strip. Colour alone said "different", not "extra".
+- **English mode still showed the manual in Chinese.** None of its labels were in
+  `i18n.js`, so the header button read `Generate操作手册` and the whole strip stayed
+  Chinese. Added, with the roster editor from v2.5.1 (also never translated) and the
+  attendee line under the confirm desk, which read `MinutesAttendees共 9 人` because its
+  wording had changed and the old pattern no longer matched. `3 分 20 秒` also stopped
+  coming out as `3 分 20 s`.
+- The strip wraps to two rows below about 760px instead of scrolling sideways, and the one
+  line of explanation is the only part that gets cut.
+
 ## v2.5.2
 
 - **The manual button looked like every other button.** It was the same 26px outline in the

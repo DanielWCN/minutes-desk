@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import sys
 from bisect import bisect_left, bisect_right
@@ -44,7 +45,7 @@ MIN_OVERLAP = 4.0     # a cluster with less than this against a name is not evid
 MIN_SHARE = 0.6       # and the winning name has to own this much of the cluster's overlap
 PEAK = 1.10           # the right shift is a sharp peak: it beats everything 5s away by this
 SPREAD = 1.20         # and it stands above the run of the mill shifts by this
-RV = 1                # how this reader works; a match written by an older one is redone
+RV = 2                # how this reader works; a match written by an older one is redone
 
 
 def _anchor(ses: Path) -> tuple[float, str]:
@@ -87,6 +88,69 @@ def _repair(rows: list[dict]) -> list[dict]:
     return out
 
 
+# A meeting client draws its own activity log in the same shape as a caption: Slack writes
+# "Alex Smith: (Guest) No response" and "6:00 PM - meeting started" into the channel, and both
+# read as "somebody: something". Neither is speech, and one of them named wrongly is worse than
+# none of them, because it pins whichever voice was talking then to a person who said nothing.
+JUNK = re.compile(r"[(]guest[)]|no response|meeting (started|ended|cancel)"
+                  r"|^\s*\d+\s*(m|min|minutes?)\s*$", re.I)
+
+
+def _name_ok(who: str) -> bool:
+    """Is this leading fragment a display name at all?
+
+    "6:00 PM - meeting started" splits into a speaker called "6", and "Mon, 10:37 AM" into one
+    called "Mon,". One real meeting (fixed in v2.6.1) filed ten such lines, and ten was enough:
+    the repair below only ran when NOTHING carried a name, so those ten kept it switched off
+    and the 205 genuine caption lines behind them all stayed anonymous.
+    """
+    try:
+        import zcap
+        return zcap._namey(who)
+    except Exception:                                          # noqa: BLE001
+        return bool(who.strip()) and len(who) <= 40
+
+
+def _roster(ses: Path, me: str = "") -> list[str]:
+    """Every name a caption line in THIS meeting could legitimately start with."""
+    try:
+        d = json.loads((ses / "session.json").read_text(encoding="utf-8"))
+    except Exception:                                          # noqa: BLE001
+        d = {}
+    out = [" ".join(x.split())
+           for x in re.split(r"[;,\n\u3001]+", str(d.get("others") or ""))]
+    if (me or "").strip():
+        out.append(" ".join(me.split()))
+    # longest first, so a "Wenjie Chen" on the list wins over a bare "Wenjie" beside it
+    return sorted({x for x in out if x}, key=len, reverse=True)
+
+
+def _by_roster(rows: list[dict], names: list[str]) -> int:
+    """Pull the speaker off the front of a caption line using the meeting's own roster.
+
+    Zoom's caption container reads "Wenjie Chen, Cool, cool." - a name, a comma, then the
+    sentence - because UIA joins a container's children with ", ". pair_items recovers that
+    only when the bare sentence sits beside it in the same scan and is long enough to be sure
+    of, and "Cool, cool." is neither. The roster settles it with no guessing left: the fragment
+    either IS one of the people in this meeting or it is not, and a name is never invented.
+    """
+    n = 0
+    low = [(x.lower(), x) for x in names]
+    for r in rows:
+        if (r.get("speaker") or "").strip():
+            continue
+        t = " ".join(str(r.get("raw") or r.get("text") or "").split())
+        tl = t.lower()
+        for k, x in low:
+            if tl.startswith(k):
+                rest = t[len(k):].lstrip(" ,:\u3001\uff1a-")
+                if rest:
+                    r["speaker"], r["text"] = x, rest
+                    n += 1
+                break
+    return n
+
+
 def load_lines(ses: Path, me: str = "") -> tuple[list[dict], int]:
     """Caption lines that carry a name and are not you. Returns (lines, your line count)."""
     f = ses / "captions.jsonl"
@@ -102,8 +166,20 @@ def load_lines(ses: Path, me: str = "") -> tuple[list[dict], int]:
             rows.append(json.loads(row))
         except Exception:                                      # noqa: BLE001
             continue
-    if len(rows) > 2 and not any((r.get("speaker") or "").strip() for r in rows):
+    kept = []
+    for r in rows:
+        if JUNK.search(str(r.get("raw") or r.get("text") or "")):
+            continue
+        if (r.get("speaker") or "").strip() and not _name_ok(str(r["speaker"])):
+            r = dict(r, speaker="")                            # a timestamp is not a person
+        kept.append(r)
+    rows = kept
+    # Not "nothing is named" any more: a handful of names in a file of hundreds means the
+    # names are still glued to the front of the text, whatever those few were.
+    named = sum(1 for r in rows if (r.get("speaker") or "").strip())
+    if len(rows) > 2 and named * 3 < len(rows):
         rows = _repair(rows)
+    _by_roster(rows, _roster(ses, me))
     me_low = (me or "").strip().lower()
     for d in rows:
         who = (d.get("speaker") or "").strip()
