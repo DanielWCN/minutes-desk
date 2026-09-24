@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 # The page is read from disk on every refresh; the server is not. So a window left open
 # from yesterday serves new HTML against old Python, and the symptoms look like data
 # bugs. Move this and UI_VERSION in ui.html together, and the page will say so out loud.
-VERSION = "2.4.16"
+VERSION = "2.5.0"
 
 # When this process started, and whether any page has spoken to it yet. The launcher
 # already ends the previous Python; these two let the browser side do the same for its
@@ -616,11 +616,12 @@ class H(BaseHTTPRequestHandler):
                         "recording": self._rec_status(),
                         "jobs": list(_jobs.values())[-6:],
                         "people": _people(),
-                        "onedrive": config.suggested_archive()})
-        elif path == "/doc/sop":
-            p = HERE / "profiles" / "sop.md"
-            self._send(200, p.read_bytes() if p.exists() else b"missing",
-                       "text/plain; charset=utf-8")
+                        "onedrive": config.suggested_archive(),
+                        "walkthroughs": config.suggested_walkthroughs()})
+        elif path == "/api/sop":
+            self._json(self._sop_get(config.load(),
+                                     str(q.get("session", [""])[0]),
+                                     str(q.get("what", [""])[0])))
         elif path == "/api/confirm":
             self._json(self._confirm_read(config.load(), str(q.get("session", [""])[0])))
         elif path == "/api/outlook":
@@ -674,6 +675,8 @@ class H(BaseHTTPRequestHandler):
             ctype = "text/html; charset=utf-8"
         if f.name == "minutes.html":
             f = self._doc_fresh(cfg, base, f)
+        if f.name == "sop.html":
+            f = self._sop_fresh(base, f)
         self._send_range(f, ctype)
 
     # -- a document rendered by an older version carries none of the current behaviour of
@@ -681,6 +684,24 @@ class H(BaseHTTPRequestHandler):
     #    around it puts that code into a file written last week. Rather than ask a person to
     #    re-save every finished meeting, re-render once, here, the moment the stale file is
     #    asked for. Failure is not fatal - the old page still opens, it just cannot be marked.
+    def _sop_fresh(self, base: Path, f: Path) -> Path:
+        """Same reason as _doc_fresh below: seeking the recording, the full-size picture and
+        the open-folder button are the manual's own code, so a manual rendered by an older
+        version does not gain them from a newer app. Re-render once, here."""
+        try:
+            with f.open("rb") as fh:
+                head = fh.read(4096).decode("utf-8", "replace")
+            import sopreport                          # noqa: PLC0415
+            m = re.search(r'name="mmt-sv" content="(\d+)"', head)
+            if m and int(m.group(1)) >= sopreport.SV:
+                return f
+            if not (base / "sop.md").is_file():
+                return f
+            f.write_text(sopreport.render(base), encoding="utf-8")
+        except Exception:                                      # noqa: BLE001
+            pass
+        return f
+
     def _doc_fresh(self, cfg: dict, base: Path, f: Path) -> Path:
         try:
             with f.open("rb") as fh:
@@ -792,6 +813,16 @@ class H(BaseHTTPRequestHandler):
 
         elif path == "/api/frames":
             self._json(self._frames(cfg, b))
+
+        elif path == "/api/sop":
+            self._json(self._sop(cfg, b))
+        elif path == "/api/sop/paste":
+            self._json(self._sop_paste(cfg, b))
+
+        elif path == "/api/pick":
+            self._json(self._pick())
+        elif path == "/api/import":
+            self._json(self._import(cfg, b))
 
         elif path == "/api/rename":
             self._json(self._rename(cfg, b))
@@ -1511,6 +1542,139 @@ class H(BaseHTTPRequestHandler):
                 "--max", str(b.get("max") or 150),
                 "--diff", str(b.get("diff") or 0.02)]
         return start_job(f"抽帧 {name}", argv)
+
+    # ------------------------------------------------------------- the operating manual
+    # A walkthrough is not a meeting: nobody wants minutes of it, they want the steps.
+    # So the manual is a separate document - its own file, its own page - and nothing of
+    # it reaches minutes.md. sop.py pairs each sentence with the screen at that second,
+    # writes sop.md, and renders sop.html.
+    def _sop_get(self, cfg: dict, name: str, what: str = "") -> dict:
+        """Where the manual stands. Cheap on purpose: the page asks this on its heartbeat,
+        and building the prompt decodes the screen recording, which is seconds of work. So
+        the prompt is only built when a person actually asks for it."""
+        d = archive.resolve(config.staging(cfg) / name)
+        if not d.is_dir():
+            return {"error": "找不到该会话"}
+        if what == "prompt":
+            try:
+                r = subprocess.run([PY, "-u", str(HERE / "sop.py"), str(d),
+                                    "--print-prompt"], capture_output=True, text=True,
+                                   encoding="utf-8", errors="replace", timeout=1800)
+            except Exception as exc:                           # noqa: BLE001
+                return {"error": str(exc)[:400]}
+            if r.returncode != 0 or not r.stdout.strip():
+                return {"error": (r.stdout or r.stderr or "").strip()[:800] or "取提示词失败"}
+            return {"ok": True, "text": r.stdout, "chars": len(r.stdout)}
+        md, sh = d / "sop.md", d / "shots"
+        fm: dict = {}
+        if md.exists():
+            try:
+                fm = M.parse_front_matter(md.read_text(encoding="utf-8"))[0] or {}
+            except Exception:                                  # noqa: BLE001
+                fm = {}
+        gate = self._engine_gate(cfg)
+        return {"ok": True, "session": d.name, "path": str(d),
+                "has_md": md.is_file(), "has_html": (d / "sop.html").is_file(),
+                "shots": len(list(sh.glob("*.png"))) if sh.is_dir() else 0,
+                "has_video": (d / "screen.mp4").exists(),
+                "has_lines": (d / "transcript.json").is_file(),
+                "title": str(fm.get("title") or ""), "lang": str(fm.get("lang") or ""),
+                "steps": fm.get("steps") or 0, "unverified": fm.get("unverified") or 0,
+                "auto": not gate, "gate": gate.get("error") or "",
+                "ask": gate.get("ask") or ""}
+
+    def _sop(self, cfg: dict, b: dict) -> dict:
+        """Pictures, then the writing, then the page: one job with one log, because the
+        first of those three is a pass over the whole screen recording."""
+        d = archive.resolve(config.staging(cfg) / str(b.get("session") or ""))
+        if not d.is_dir():
+            return {"error": "找不到该会话"}
+        if not (d / "transcript.json").is_file():
+            return {"error": f"{d.name} 还没有逐字稿，先跑语音识别"}
+        gate = self._engine_gate(cfg)
+        if gate:
+            return gate
+        return start_job(f"生成操作手册 {d.name}",
+                         [PY, "-u", str(HERE / "sop.py"), str(d), "--draft"])
+
+    # -- importing a recording somebody else made
+    def _pick(self) -> dict:
+        """The native file dialog. A browser hands JavaScript the file's contents but never
+        its path, and this tool needs the path: it reads the recording off the disk where it
+        already sits instead of copying hundreds of megabytes through the page. So the box
+        is opened by Windows, owned by a top-most window so it does not come up behind the
+        browser, and only the path comes back."""
+        ps = r"""
+Add-Type -AssemblyName System.Windows.Forms
+$own = New-Object System.Windows.Forms.Form
+$own.TopMost = $true; $own.ShowInTaskbar = $false
+$own.Size = New-Object System.Drawing.Size(1,1)
+$own.StartPosition = 'CenterScreen'
+$own.Show(); $own.Hide()
+$d = New-Object System.Windows.Forms.OpenFileDialog
+$d.Title = 'Pick a recording'
+$d.Filter = 'Recordings|*.mp4;*.mkv;*.mov;*.webm;*.avi;*.m4a;*.mp3;*.wav;*.m4v|All files|*.*'
+$d.Multiselect = $false
+if ($d.ShowDialog($own) -eq [System.Windows.Forms.DialogResult]::OK) {
+  [Console]::Out.WriteLine($d.FileName)
+}
+$own.Dispose()
+"""
+        try:
+            r = subprocess.run(["powershell.exe", "-NoProfile", "-STA", "-Command", ps],
+                               capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=600)
+        except Exception as exc:                               # noqa: BLE001
+            return {"error": str(exc)[:300]}
+        got = (r.stdout or "").strip().splitlines()
+        path = got[-1].strip() if got else ""
+        if path and not Path(path).is_file():
+            return {"error": f"选到的文件读不到：{path}"}
+        return {"ok": True, "path": path}
+
+    def _import(self, cfg: dict, b: dict) -> dict:
+        """One job: pull the audio out, remux the picture, transcribe, then write the
+        manual. The file stays where it is; nothing is moved or deleted."""
+        src = str(b.get("path") or "").strip().strip('"')
+        if not src:
+            return {"error": "先选一个录制文件"}
+        f = Path(src)
+        if not f.is_file():
+            return {"error": f"这个文件不存在：{src}"}
+        if _rec["proc"] is not None and _rec["proc"].poll() is None:
+            return {"error": "正在录制，先停止录制再导入"}
+        argv = [PY, "-u", str(HERE / "importrec.py"), str(f)]
+        title = str(b.get("title") or "").strip()
+        if title:
+            argv += ["--title", title]
+        if not b.get("sop", True):
+            argv.append("--no-sop")
+        return start_job(f"导入录屏 {f.name}", argv, heavy=True)
+
+    def _sop_paste(self, cfg: dict, b: dict) -> dict:
+        """The copy-paste route back, for a machine that cannot drive the assistant. Same
+        checks the automatic route gets: a step citing a picture that does not exist reads
+        exactly as confident as one that does, so it is rejected rather than shown."""
+        d = archive.resolve(config.staging(cfg) / str(b.get("session") or ""))
+        if not d.is_dir():
+            return {"error": "找不到该会话"}
+        text = llm.clean(str(b.get("text") or ""))
+        if not text.strip():
+            return {"error": "粘进来的内容是空的"}
+        import sop                                    # noqa: PLC0415  heavy, this path only
+        import sopreport                              # noqa: PLC0415
+        have = (sorted(p.name for p in (d / "shots").glob("*.png"))
+                if (d / "shots").is_dir() else [])
+        bad = sop.validate(text, have)
+        if bad and not b.get("force"):
+            return {"error": "这份手册没通过检查：" + "；".join(bad), "problems": bad}
+        f = d / "sop.md"
+        if f.is_file():
+            (d / "sop.md.bak").write_text(f.read_text(encoding="utf-8"),
+                                          encoding="utf-8", newline="\n")
+        f.write_text(text, encoding="utf-8", newline="\n")
+        (d / "sop.html").write_text(sopreport.render(d), encoding="utf-8")
+        return {"ok": True, "steps": len(sop.STEP.findall(text)), "chars": len(text)}
 
 
 class Srv(ThreadingHTTPServer):

@@ -12,6 +12,50 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.5.0
+
+- **A screen recording now becomes an operating manual, not just minutes.** Point the tool
+  at a walkthrough and it writes `sop.md` and a page to read it in: numbered steps, each one
+  saying where you are, what to do, and what tells you it worked, and each one carrying the
+  picture from the moment it happened plus the sentence that was said. It is a separate
+  document from the minutes and nothing from it reaches `minutes.md`. One button, 「生成操作手册」,
+  on the meeting page; it replaces the old 「处理 SOP」 button, which only ever handed you a
+  prompt. On a machine that can drive the assistant it writes the manual itself; on one that
+  cannot, the same card hands over the prompt and takes the answer back.
+
+- **The pictures are chosen by what was said, not by how much the screen changed.** Two
+  frames per sentence, one just after it starts and one just after it ends, then duplicates
+  dropped. The existing key-frame detector was measured on the same recording and kept 4 of
+  the 10 screens at its default threshold, because a screen that changes in one table cell is
+  a smaller change than a scroll. Sentence-anchored sampling found 10 of 10. Comparing them
+  in colour rather than grey matters more than it sounds: a yellow highlight band over a white
+  table is 252,243,203 against 242,242,245, which is a wall of colour and 1.4 grey levels.
+
+- **Zoom, Teams and OBS recordings can be brought in.** The box for it is on the same page as
+  「开始录制」. The file is read where it already sits and is never moved or deleted; the
+  picture track is copied packet for packet rather than re-encoded, so a 62-second test file
+  imported this way produced the same 15 sentences and the same 10 distinct screens as the
+  original recorded in the tool. An imported file has one mixed audio track, so it cannot be
+  split by speaker, and the page says so rather than leaving you to notice.
+
+- **An audio-only recording still gets a manual.** Same timeline without the pictures, quotes
+  in place of screenshots, and the page says up front that it has no picture evidence. A step
+  never cites a screenshot that does not exist: the manual is rejected before it is saved if
+  it does.
+
+- **Imported walkthroughs archive beside the meetings rather than among them.** Meetings keep
+  going to `OneDrive\Meetings\Recordings`; a walkthrough goes to `OneDrive\Meetings\Walkthroughs`,
+  a second path you can edit in Settings. Which one it is comes from the session's own record
+  of where it came from, not from its name. Leave the second path empty and everything goes
+  where it always did.
+
+- **`pagetest.py` now covers the manual too, 33 checks in about a second.** Same blind spot as
+  the minutes: a manual carries its own stylesheet, its own seeking and its own lightbox, so a
+  change to the renderer is correct in the program and absent from every manual already
+  written. It renders a fixture and asserts that both steps became cards, that no picture on
+  the page is missing from the folder, that no raw file path is left in the prose, and that the
+  version stamp is where the code that reads it looks.
+
 ## v2.4.16
 
 - **Every time you opened a set of minutes, the app rebuilt the whole document first.** It

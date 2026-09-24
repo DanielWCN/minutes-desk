@@ -85,11 +85,23 @@ def suggested_archive() -> str:
     return str(od / "Meetings" / "Recordings") if od else ""
 
 
+def suggested_walkthroughs() -> str:
+    """Imported walkthroughs go beside the meetings, not among them. A folder of meetings
+    is a record of what was said; a folder of walkthroughs is a library of how things are
+    done, and people go looking for the two at different times. English names on purpose:
+    a Chinese folder name with a space in it comes back mangled in a local file link."""
+    od = onedrive_root()
+    return str(od / "Meetings" / "Walkthroughs") if od else ""
+
+
 def defaults() -> dict:
     return {
         "me": "",
         "staging_dir": str(USER_DIR / "sessions"),
         "archive_dir": suggested_archive(),
+        # where an imported walkthrough goes instead. Empty falls back to archive_dir, so
+        # an existing install that never saw this key keeps behaving exactly as it did.
+        "walkthrough_dir": suggested_walkthroughs(),
         "archive_enabled": bool(suggested_archive()),
         "model": "large-v3-turbo",
         "mic_device": "",          # "" = Windows default

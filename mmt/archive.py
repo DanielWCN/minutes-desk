@@ -30,9 +30,28 @@ def state(session: Path) -> str:
     return "local"
 
 
+def origin(session: Path) -> str:
+    """meeting | import, out of the session's own JSON.
+
+    Never out of the folder name. A person is free to rename a session, and a rename is not
+    a statement about where the material came from.
+    """
+    try:
+        d = json.loads((session / "session.json").read_text(encoding="utf-8"))
+        return "import" if str(d.get("origin") or "") == "import" else "meeting"
+    except Exception:                                          # noqa: BLE001
+        return "meeting"
+
+
 def target(session: Path, cfg: dict | None = None) -> Path:
+    """Meetings and imported walkthroughs go to two different folders, because they are two
+    different things to go looking for later. An install that has never seen
+    walkthrough_dir keeps everything exactly where it already puts it."""
     cfg = cfg or config.load()
-    return Path(cfg["archive_dir"]) / session.name
+    root = cfg["archive_dir"]
+    if origin(session) == "import":
+        root = str(cfg.get("walkthrough_dir") or "").strip() or root
+    return Path(root) / session.name
 
 
 def size_mb(p: Path) -> float:

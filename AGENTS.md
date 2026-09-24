@@ -188,11 +188,14 @@ python lexicon.py               # what the merged glossary currently holds
 python llm.py --ping            # does the assistant really answer? exit 0 = yes
 python doctor.py                # the self-checks, as JSON
 python pagetest.py              # the shape of a rendered document; exit 0 = intact
+python sop.py <session> --draft  # write the operating manual for one session
+python importrec.py <file>       # bring in a Zoom / Teams / OBS recording
 ```
 
-Run `pagetest.py` after touching `report.py`, `app.py` or `ui.html`. A document carries its
-own stylesheet, so a change in one of those three can be correct in the program and wrong in
-every meeting already on disk, and that is not visible from the outside. It renders a
+Run `pagetest.py` after touching `report.py`, `sopreport.py`, `app.py` or `ui.html`. A
+document carries its own stylesheet, so a change in any of those four can be correct in the
+program and wrong in every meeting already on disk, and that is not visible from the
+outside. It renders a
 fixture and asserts the promises the program makes about the file it serves: the version
 stamp is where the code that reads it looks, no window width removes anything from the
 title bar, the bar may grow to two rows, and both halves carry the same version number.

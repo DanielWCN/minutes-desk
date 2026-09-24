@@ -1068,6 +1068,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></symbol>
 <symbol id="i-lang" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></symbol>
 <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12h2M6 8v8M10 4v16M14 7v10M18 10v4M22 12h0"/></symbol>
+<symbol id="i-steps" viewBox="0 0 24 24"><path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"/></symbol>
 <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
 </defs></svg>
 
@@ -1167,6 +1168,32 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
               <span id="recmsg" class="msg"></span>
               <button class="btn pri lg" id="recgo" onclick="recStart()">开始录制</button>
             </div>
+
+            <!-- The other way in. Zoom, Teams and OBS all leave a file on the disk; that
+                 file goes through the same pipeline as a meeting recorded here, so a
+                 walkthrough somebody already recorded can still become a manual. Visible
+                 rather than folded away: it is a way to start, not a setting. -->
+            <div class="divider" style="margin-top:20px"></div>
+            <div class="fitem">
+              <label for="i_path">已经有录好的文件<i>Zoom、Teams、OBS 录的都行。文件留在原处，不会被移动或删除。
+                只有一条混在一起的音轨，所以分不出谁在说话 —— 手册不受影响，逐字稿不标发言人</i></label>
+              <div class="row">
+                <input type="text" id="i_path" class="f1" spellcheck="false"
+                  placeholder="C:\Users\you\Videos\Zoom\console walkthrough.mp4">
+                <button class="btn" id="i_pick" onclick="impPick()"
+                  title="打开 Windows 的选文件窗口">选文件…</button>
+              </div>
+            </div>
+            <div class="fitem" style="margin-top:10px">
+              <label for="i_title">这段录的是什么<i>留空就用文件名</i></label>
+              <div class="row">
+                <input type="text" id="i_title" class="f1"
+                  placeholder="例如 Utilization Console 排查步骤">
+                <span id="impmsg" class="msg"></span>
+                <button class="btn pri" id="impgo" onclick="impGo()">导入并生成手册</button>
+              </div>
+            </div>
+            <div id="implog" class="log" hidden></div>
           </div>
           <div id="reclive" hidden>
             <div class="row">
@@ -1200,6 +1227,8 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
         <span class="f1"></span>
         <button class="btn ib" id="res_open" hidden onclick="openMinutes()" title="查看纪要">
           <svg class="ic"><use href="#i-doc"/></svg></button>
+        <button class="btn ib" id="res_sopb" hidden onclick="openSop()" title="查看操作手册">
+          <svg class="ic"><use href="#i-steps"/></svg></button>
         <button class="btn ib" id="res_up" hidden onclick="upSes()"
           title="上传至 OneDrive（本地仅保留索引）">
           <svg class="ic"><use href="#i-cloud"/></svg></button>
@@ -1233,6 +1262,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
         <!-- 2 语音识别: the heavy step and what it produced -->
         <div class="pn" id="pn_asr" hidden>
           <div id="res_out"></div>
+          <div id="res_sop"></div>
         </div>
         <!-- 3 校对确认: the only place a person is required -->
         <div class="pn" id="pn_fix" hidden>
@@ -1333,8 +1363,11 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
       <div class="g2">
         <div class="fitem"><label for="c_stage">本地暂存目录<i>录制与处理在此进行</i></label>
           <input type="text" id="c_stage"></div>
-        <div class="fitem"><label for="c_arch">OneDrive 归档目录<i>确认完成后归档至此</i></label>
+        <div class="fitem"><label for="c_arch">OneDrive 归档目录<i>会议归档至此</i></label>
           <input type="text" id="c_arch"></div>
+        <div class="fitem"><label for="c_wt">导入的录制放哪<i>Zoom、Teams、OBS 导进来的走这里，
+          跟会议分开。留空就跟会议放一起</i></label>
+          <input type="text" id="c_wt"></div>
       </div>
       <div class="row" style="margin-top:12px">
         <label class="chk"><input type="checkbox" id="c_archen"><span>开启 OneDrive 归档</span></label>
@@ -1407,7 +1440,7 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.4.16';
+const UI_VERSION = '2.5.0';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -1923,6 +1956,7 @@ function fillCfg(){
   const c = S.config;
   $('#c_me').value = c.me; $('#c_model').value = c.model;
   $('#c_stage').value = c.staging_dir; $('#c_arch').value = c.archive_dir;
+  $('#c_wt').value = c.walkthrough_dir || '';
   $('#c_archen').checked = c.archive_enabled; $('#c_video').checked = c.video;
   $('#c_caps').checked = c.captions !== false;
   $('#c_vfps').value = c.video_fps; $('#c_vcrf').value = c.video_crf;
@@ -1932,11 +1966,13 @@ function fillCfg(){
 function useOneDrive(){
   if (!S.onedrive){ $('#cfgmsg').textContent = '没检测到已同步的 OneDrive。'; return; }
   $('#c_arch').value = S.onedrive; $('#c_archen').checked = true;
+  if (!$('#c_wt').value && S.walkthroughs) $('#c_wt').value = S.walkthroughs;
 }
 async function saveCfg(){
   const r = await api('/api/config', {
     me:$('#c_me').value.trim(), model:$('#c_model').value,
     staging_dir:$('#c_stage').value.trim(), archive_dir:$('#c_arch').value.trim(),
+    walkthrough_dir:$('#c_wt').value.trim(),
     archive_enabled:$('#c_archen').checked, video:$('#c_video').checked,
     captions:$('#c_caps').checked,
     video_fps:+$('#c_vfps').value||3, video_crf:+$('#c_vcrf').value||32,
@@ -2086,6 +2122,41 @@ async function recStart(){
   if (!tRec) tRec = setInterval(pollRec, 500);
 }
 async function recCmd(c){ await api('/api/record/cmd', {cmd:c}); }
+
+/* ------------------------------------------------------- importing someone else's file
+   A browser gives JavaScript a file's bytes and never its path, and a drag-and-drop box
+   would therefore mean copying a gigabyte of video through this page for no reason. So
+   Windows opens its own dialog and only the path comes back; the file is read where it
+   already lies and nothing is moved or deleted. */
+async function impPick(){
+  const m = $('#impmsg'), b = $('#i_pick');
+  m.className = 'msg'; m.textContent = '';
+  b.disabled = true;
+  let r;
+  try { r = await api('/api/pick', {}); }
+  finally { b.disabled = false; }
+  if (r.error){ m.className = 'msg err'; m.textContent = r.error; return; }
+  if (!r.path) return;                             // cancelled, which is not a failure
+  $('#i_path').value = r.path;
+  if (!$('#i_title').value){
+    const base = r.path.split(/[\\/]/).pop().replace(/[.][^.]+$/, '');
+    $('#i_title').value = base;
+  }
+}
+async function impGo(){
+  const m = $('#impmsg'), path = $('#i_path').value.trim();
+  m.className = 'msg';
+  if (!path){ m.className = 'msg err'; m.textContent = '先选一个文件'; return; }
+  m.textContent = '读取中…';
+  $('#impgo').disabled = true;
+  const r = await api('/api/import', {path:path, title:$('#i_title').value.trim()});
+  $('#impgo').disabled = false;
+  if (r.error){ m.className = 'msg err'; m.textContent = r.error; return; }
+  m.textContent = '导入中，转写一小时的录制大约十分钟，这一页可以不管它';
+  $('#implog').hidden = false;
+  jobKind = 'import';
+  watch(r, '#implog');
+}
 /* One tool, one tab. The launcher ends the previous Python; this ends the previous page.
    `boot` is the moment the server started, so a value different from the one this page
    loaded with means the tool was restarted and this tab is now yesterday's HTML talking
@@ -2316,7 +2387,6 @@ function drawCur(){
       s.frames ? ` · 已有 ${s.frames} 张` : ''}</button>`);
   if (s.state === 'local' && s.has_minutes && S.config.archive_enabled)
     acts.push(`<button class="btn sm" onclick="upSes()"><svg class="ic sm"><use href="#i-cloud"/></svg>上传至 OneDrive</button>`);
-  acts.push(`<a class="btn sm" target="_blank" href="/doc/sop">处理 SOP</a>`);
 
   // the document belongs on this page; a second window is a choice, not the only route
   const has = n => out.some(f => f.name === n);
@@ -2346,9 +2416,145 @@ function drawCur(){
          </div></div>
        <div class="row" style="margin-top:12px">${acts.join('')}</div>`;
   if (html !== outHtml){ outHtml = html; $('#res_out').innerHTML = html; }
+  drawSop();
   drawDoc();
 }
 let outHtml = null;
+
+/* ================================================== the operating manual
+   A walkthrough is not a meeting. What a person wants back from "let me show you how this
+   works" is the steps, each with the screen at that second and the words that were said -
+   and none of that belongs in a set of minutes. So it is a separate file and a separate
+   page, and this card is the way in.
+
+   State is read once per session, not on the 3 s heartbeat: it asks the server whether the
+   assistant on this machine can be driven, and that answer does not change while you look
+   at it. */
+let SOP = null, sopWant = '', sopSig = null;
+async function loadSop(name){
+  sopWant = name;
+  const r = await api('/api/sop?session=' + encodeURIComponent(name));
+  if (r && !r.error) SOP = r;
+  sopSig = null;
+  drawSop();
+}
+function openSop(){
+  const s = ses(cur);
+  if (s) window.open(url(s.name, 'sop.html'), '_blank');
+}
+function drawSop(){
+  const host = $('#res_sop'), b = $('#res_sopb'), s = ses(cur);
+  if (!host) return;
+  // no transcript, nothing to write a manual from: a button that cannot work is worse
+  // than no button, because it invites a click that ends in an error
+  if (!s || !(s.lines > 0)){
+    if (host.innerHTML) host.innerHTML = '';
+    if (b) b.hidden = true;
+    SOP = null; sopWant = ''; sopSig = '-';
+    return;
+  }
+  if (!SOP || SOP.session !== s.name){
+    if (sopWant !== s.name) loadSop(s.name);
+    return;
+  }
+  if (b) b.hidden = !SOP.has_html;
+  const sig = [SOP.session, SOP.has_md, SOP.has_html, SOP.shots, SOP.steps,
+               SOP.unverified, SOP.auto].join('|');
+  if (sig === sopSig) return;                 // never rebuild a card under the cursor
+  sopSig = sig;
+  host.innerHTML = sopCard(s, SOP);
+}
+function sopCard(s, P){
+  const has = P.has_md && P.has_html;
+  const tag = has
+    ? `<span class="tag green">${P.steps || '?'} 步 · ${P.shots} 张画面${
+        (+P.unverified > 0) ? ` · ${P.unverified} 处待确认` : ''}</span>`
+    : '<span class="tag">未生成</span>';
+  // said out loud, because a manual with no pictures is a different thing to follow and
+  // the difference is not the tool's to hide
+  const note = P.has_video
+    ? '把这段演示写成能照着做的步骤：每一步都带当时的屏幕和原话。'
+    : '这场只有录音没有录屏，手册只会有原话，没有画面。';
+  const mk = `<button class="btn ${has ? '' : 'pri '}sm" onclick="doSop()">${
+    has ? '重新生成' : '生成操作手册'}</button>`;
+  const open = has
+    ? `<a class="btn pri sm" target="_blank" href="${url(s.name, 'sop.html')}">打开手册</a>`
+    : '';
+  const md = has
+    ? `<a class="btn sm" target="_blank" href="${url(s.name, 'sop.md')}">看原文 sop.md</a>`
+    : '';
+  const gate = P.auto ? ''
+    : `<div class="hint" style="margin-top:8px">这台机器不能自己调助手：${esc(P.gate)}
+       用「拿提示词」那个按钮，把提示词贴给助手，再把回来的内容粘回来。</div>`;
+  return `<div class="stg" style="margin-top:14px">
+    <div class="grp"><u>≡</u><h4>操作手册</h4><i>${note}</i>
+      <span class="f1"></span>${tag}</div>
+    ${gate}
+    <div class="row" style="margin-top:9px">
+      ${open}${mk}${md}
+      <button class="btn txt q sm" onclick="sopPrompt()">拿提示词</button>
+      <button class="btn txt q sm" onclick="sopPasteStart()">粘贴手册</button>
+      <span class="f1"></span><span class="msg" id="sopmsg"></span>
+    </div>
+    <div class="row" style="margin-top:8px;align-items:center">
+      <span class="sub">文件都在</span>
+      <code class="sub" style="word-break:break-all">${esc(s.path)}</code>
+      <button class="btn txt q sm" onclick="reveal('${
+        esc(s.path).replace(/\\/g, '\\\\')}')">打开文件夹</button>
+    </div>
+    <div id="soppw"></div></div>`;
+}
+/* Minutes of video to decode, then the assistant writes, then the page renders: a job with
+   a log, like transcription, not a request the page sits and waits on. */
+async function doSop(){
+  const s = ses(cur);
+  if (!s) return;
+  const m = $('#sopmsg');
+  if (m) m.textContent = '正在启动…';
+  jobKind = 'sop';
+  watch(await api('/api/sop', {session:s.name}), view === 'hist' ? '#hlog' : '#jlog');
+}
+async function sopPrompt(){
+  const s = ses(cur), m = $('#sopmsg');
+  if (!s) return;
+  if (m) m.textContent = '正在配画面，稍等…';
+  const r = await api('/api/sop?what=prompt&session=' + encodeURIComponent(s.name));
+  if (r.error){ if (m) m.textContent = ''; alert(r.error); return; }
+  const ok = await cp(r.text);
+  if (m) m.textContent = ok
+    ? `已复制 ${Math.round(r.chars / 1000)}k 字，贴给助手，回来的内容用「粘贴手册」写回`
+    : '复制失败';
+}
+function sopPasteStart(){
+  const w = $('#soppw');
+  if (!w) return;
+  w.innerHTML = `<div class="row" style="margin-top:10px"><span class="sub">
+      把助手回的整份手册粘进来，从第一行的 --- 开始</span><span class="f1"></span>
+      <span class="msg" id="sopps"></span>
+      <button class="btn sm" onclick="$('#soppw').innerHTML=''">取消</button>
+      <button class="btn pri sm" onclick="sopPasteGo(0)">写入并成页</button></div>
+    <textarea id="sopptx" spellcheck="false" style="width:100%;height:220px;margin-top:6px"></textarea>`;
+  $('#sopptx').focus();
+}
+async function sopPasteGo(force){
+  const s = ses(cur), e = $('#sopptx'), m = $('#sopps');
+  if (!s || !e) return;
+  if (m) m.textContent = '正在写入…';
+  const r = await api('/api/sop/paste', {session:s.name, text:e.value, force:!!force});
+  if (r.error){
+    if (m) m.textContent = '';
+    const pb = r.problems || [];
+    if (pb.length){
+      if (confirm(r.error + '\n\n' + pb.map(x => '· ' + x).join('\n')
+                  + '\n\n仍然按原样写入？')) return sopPasteGo(1);
+    } else alert(r.error);
+    return;
+  }
+  $('#soppw').innerHTML = '';
+  SOP = null; sopWant = '';
+  ban('ok', `操作手册已写入 · ${r.steps} 步`, '点「打开手册」就能看。');
+  drawSop();
+}
 
 /* ============================================================== the document
    The minutes are the product, so they get their own stop on the left rail. The iframe
@@ -3341,13 +3547,35 @@ async function pollJob(){
     $('#pg_e').textContent = mm;
     const kind = jobKind; jobKind = null;
     CF = null;                       // whatever the job wrote, re-read it from disk
+    SOP = null; sopWant = '';
     await refresh(0);
     if (kind && j.state === 'failed')
       ban('fail', (kind === 'asr' ? '语音识别失败'
                    : kind === 'revise' ? '按标注重写失败'
                    : kind === 'mirror' ? '同步另一份稿子失败'
+                   : kind === 'sop' ? '操作手册没写成'
+                   : kind === 'import' ? '导入失败'
                    : '生成文档失败'),
           '原因见日志末尾几行（在上方进度条的「查看日志」里）。可截图发送给 AI 助手 定位。');
+    else if (kind === 'import'){
+      // The job prints the folder it made as its last word; that is what to open.
+      const hit = /^== session (.+)$/m.exec((j.lines || []).join('\n'));
+      $('#impmsg').textContent = '';
+      $('#i_path').value = ''; $('#i_title').value = '';
+      if (hit){
+        openSes(hit[1].trim());
+        ban('ok', '录制已导入', '逐字稿和操作手册都已生成 —— 原文件留在原处没动。'
+            + '这段只有一条混在一起的音轨，所以逐字稿不标发言人。');
+      } else {
+        ban('fail', '导入完成了，但没找到生成的会话',
+            '日志在上一页的导入框下面。可截图发送给 AI 助手 定位。');
+      }
+    }
+    else if (kind === 'sop'){
+      SOP = null; sopWant = ''; drawSop();
+      ban('ok', '操作手册已生成', '每一步都带当时的画面和原话。点「打开手册」查看；'
+          + '改文字就改同一个文件夹里的 sop.md，刷新那一页就跟着变。');
+    }
     else if (kind === 'asr'){
       const s = ses(cur);
       if (s && s.lines > 0)

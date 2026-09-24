@@ -115,6 +115,38 @@ of a long meeting is still covered. You also get contact sheets, a whole meeting
 One known limit: two monitors are captured as one wide image and then squeezed into the same
 1280 px, which makes text unreadable. Undock, or leave it off.
 
+## Turning a walkthrough into an operating manual
+
+A recording of somebody showing you how a thing is done is worth more as a manual than as
+minutes, so the tool writes one. Press **生成操作手册** on the meeting page and you get
+`sop.md` and a page to read it in: numbered steps, each saying where you are, what to do and
+what tells you it worked, each carrying the picture from the moment it happened and the
+sentence that was said at it. It is a separate document; nothing from it goes into the
+minutes.
+
+The pictures are chosen by what was said rather than by how much the screen changed: two
+frames per sentence, one just after it starts and one just after it ends, duplicates
+dropped. On the same recording the key-frame detector above keeps 4 of the 10 screens at its
+default threshold, because a screen that changes in one table cell is a smaller change than
+a scroll; sentence-anchored sampling found 10 of 10.
+
+A step never cites a screenshot that does not exist - the manual is rejected before it is
+saved if it does - and an **audio-only** recording still gets a manual, with quotes where the
+pictures would be and a line at the top saying it has no picture evidence.
+
+**You can bring in a recording made somewhere else.** The box is on the same page as 开始录制:
+give it a Zoom, Teams or OBS file and it goes through the same pipeline. The file is read
+where it already sits and is never moved or deleted, and the picture track is copied packet
+for packet rather than re-encoded. One thing it cannot do: an imported file has a single
+mixed audio track, so the transcript cannot be split by speaker. The page says so rather
+than leaving you to notice.
+
+Imported walkthroughs archive to `OneDrive\Meetings\Walkthroughs` instead of
+`...\Meetings\Recordings` - a folder of meetings is a record of what was said, a folder of
+walkthroughs is a library of how things are done, and people go looking for the two at
+different times. Both paths are in Settings; leave the second empty and everything goes
+where it always did.
+
 ## Who writes the minutes
 
 The tool ships with no language model inside it and never will: a meeting transcript is the
@@ -344,6 +376,29 @@ python install.py          # 两条路实际上跑的都是这一句
 
 已知的一个限制：两块屏会被当成一张宽图，再压进同样的 1280 像素，字就看不清了。要么拔线，
 要么别开。
+
+## 把演示录成操作手册
+
+有人给你演示一件事怎么做，这段录像做成手册比做成纪要有用，所以工具会写。会议页上点
+**生成操作手册**，出来一个 `sop.md` 和一页读它的网页：编号的步骤，每一步写清在哪里、做什么、
+看到什么算成功，每一步都带当时那一刻的画面和当时说的那句话。它是另一份文档，里面的东西
+一个字也不会进纪要。
+
+取哪几张画面，是按**话**定的，不是按屏幕变了多少：一句话取两帧，刚开口后一帧、说完后一帧，
+重复的丢掉。同一段录像，上面那个关键帧检测在默认门槛下只留下 10 个画面里的 4 个 —— 表格里
+一个格子变了，比整页滚动的变化小得多；按句子取则 10 个全在。
+
+步骤绝不会引用一张不存在的截图（引用了就在写盘前被拒掉）；**只有录音**的也照样能出手册，
+该放图的地方放原话，页面顶上直接写明这份没有画面证据。
+
+**别的地方录的也能导进来。** 入口就在 开始录制 那一页：给它一个 Zoom、Teams 或者 OBS 的文件，
+后面的流程完全一样。文件就在原处读，不会被移动也不会被删除，画面轨是一个包一个包复制过去的，
+不重新编码。有一件事它做不到：导进来的文件只有一条混在一起的音轨，所以逐字稿分不出谁在说话。
+这句话页面上就写着，不用你自己去发现。
+
+导进来的演示归档到 `OneDrive\Meetings\Walkthroughs`，不和 `...\Meetings\Recordings` 混在
+一起 —— 一个装的是说过什么，一个装的是事情怎么做，找它们的时候通常也不是同一个时候。两个
+路径都在设置里；第二个留空，一切照旧。
 
 ## 词库分两层
 
