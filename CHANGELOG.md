@@ -12,6 +12,60 @@ generation of the tool on people's machines.
 拉一下代码再跑一次 `python install.py`。编号从 v2.0.0 起，因为开始编号的时候，大家机器上
 跑的已经是第二代了。
 
+## v2.8.1
+
+**The tour now walks in the order you do things in, not the order they sit on the screen.**
+It used to start with the meeting list because that is the left edge, and leave the lamps
+and the settings until the end because those are the top right. Reading it back, the
+sequence made no sense to anyone who had just opened the program. It now goes: what this
+is, are the lamps green, fill the settings once, open a meeting, name it, check the
+attendees, press record, the four stages, start the run, the confirm desk, the document,
+and the version stamp that brings the tour back. The chapters are named for the journey -
+before you start, start a meeting, transcribe, the minutes - and a machine with nothing on
+it yet still gets a plan that fits it, with the chapter rail and the step count telling the
+truth about that plan.
+
+## v2.8.0
+
+**The guided tour, rebuilt in place.** The first cut of it parked a card in the middle of
+the screen before each step and opened and closed on a card with nothing behind it. This
+one never does that: every step rings a real element, the first rings the logo and the last
+rings the version stamp that brings the tour back, so there is no floating panel and no
+closing panel.
+
+- The dark is now an SVG mask with a single hole in it, and one `requestAnimationFrame`
+  loop lerps the scroll, the hole and the card together. The card is moved by
+  `transform`, never by `left` / `top`. The eye follows one movement instead of hunting
+  for a box that reappeared somewhere else.
+- The card carries what it was missing: the **MD** mark, an emoji per step, a chapter rail
+  whose dots jump to a chapter, the chapter name, `n/N`, and a progress bar.
+- **First run is handled as its own case.** The tour no longer fires blind 900 ms after the
+  first fetch; it waits for the page to have finished (the lamp rack drawn, nothing else
+  running, no popover open) and gives up waiting after nine seconds rather than never
+  starting. Each step then waits for its own target, with a loading bar running across the
+  top of the card, for up to three seconds - and is skipped, not left ringing empty space,
+  if it never arrives.
+- On a machine with nothing on it yet the plan is shorter and says so: the five session
+  steps are not in it, the step count and the dots are the real numbers, and the meeting
+  list step reads "it is empty right now" instead of describing meetings that are not
+  there.
+- Both languages still live in the card itself, and flipping the language repaints it.
+
+## v2.7.0
+
+- **A guided tour, the first time the page is opened.** One window at a time, each one
+  ringing a single place on the screen: the list of meetings, the name and the Outlook
+  load, the attendee list and why it decides the names, the record button and the two
+  tracks, the four stages, ticking the roster before transcription, the confirm desk, the
+  finished sheet, the self-check lamps, the settings and the glossary. The plan adapts to
+  what is on screen rather than describing things that are not there - a fresh install has
+  no meeting in it, so the meeting steps are not in the plan and the dots say how many
+  steps there really are. The hole in the dark and the card both travel from where they
+  were to where they are going, because a window that jumps makes the reader hunt for it
+  instead of follow it. Arrow keys step, Esc leaves, and the card carries both languages
+  itself instead of being translated after the fact. It runs once, unasked; after that the
+  version stamp beside the logo brings it back.
+
 ## v2.6.1
 
 - **The captions were being read and then thrown away.** A real 17-minute meeting with

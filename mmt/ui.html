@@ -1099,6 +1099,56 @@ input[type=search]:focus{outline:none;border-color:var(--primary-hi);
 [data-theme=light] ::-webkit-calendar-picker-indicator{filter:none}
 input[type=date]::-webkit-datetime-edit{color:var(--dim)}
 input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
+
+/* ================================================================== guided tour
+   In place, never parked. Every step rings something that is really on the screen
+   and the card arrives beside it; there is no welcome panel in the middle of the
+   window, because a card with nothing behind it teaches nothing.
+   The dark is an SVG mask with one hole in it, so the hole can be animated as a
+   rectangle instead of as a 9999px shadow, and one requestAnimationFrame loop
+   lerps the scroll, the hole and the card together - the eye follows a movement
+   instead of hunting for a box that reappeared somewhere else.
+   The loading bar across the top is not decoration: a step whose content has not
+   arrived yet waits behind it, which is what the first run after an install
+   actually looks like. */
+#tour_svg{position:fixed;left:0;top:0;width:100%;height:100%;z-index:120;pointer-events:none;display:none}
+#tour_dim{fill:rgba(0,0,0,.64)}
+[data-theme=light] #tour_dim{fill:rgba(16,24,40,.44)}
+#tour_ring{fill:none;stroke:var(--primary-hi);stroke-width:2}
+#tour_grab{position:fixed;inset:0;z-index:121;display:none}
+#tour_card{position:fixed;left:0;top:0;z-index:122;display:none;width:366px;
+  max-width:calc(100vw - 24px);background:var(--pane);border:1px solid var(--edge);
+  border-radius:var(--r-lg);box-shadow:var(--sh);padding:11px 15px 12px;overflow:hidden;
+  will-change:transform;transform:translate3d(-9999px,-9999px,0)}
+#tour_card:before{content:"";position:absolute;left:0;top:0;height:2px;width:0;opacity:0;
+  background:linear-gradient(90deg,var(--primary),var(--acc))}
+#tour_card.busy:before{opacity:1;animation:tcload 1.1s ease-in-out infinite}
+@keyframes tcload{0%{width:0;left:0}55%{width:100%;left:0}100%{width:0;left:100%}}
+#tour_rail{display:flex;align-items:center;gap:6px;margin-bottom:9px}
+#tour_rail .tmk{flex:none;width:19px;height:19px;border-radius:var(--r);background:var(--primary);
+  color:#fff;font:600 9px/19px var(--mono);text-align:center;letter-spacing:.02em}
+#tour_rail .tdot{flex:none;width:15px;height:15px;border-radius:50%;padding:0;cursor:pointer;
+  border:1.5px solid var(--edge);background:transparent;color:var(--faint);
+  font:600 8.5px/1 var(--mono);display:flex;align-items:center;justify-content:center;
+  transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease}
+#tour_rail .tdot:hover{border-color:var(--primary-hi);color:var(--primary-hi)}
+#tour_rail .tdot.done{border-color:var(--primary);color:var(--primary-hi)}
+#tour_rail .tdot.now{background:var(--primary);border-color:var(--primary-hi);color:#fff;transform:scale(1.15)}
+#tour_rail .tlbl{font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--faint);
+  margin-left:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tour_card .ttop{display:flex;align-items:baseline;gap:7px;margin-bottom:5px}
+#tour_card .temo{flex:none;font-size:15px;line-height:1.2}
+#tour_card h4{margin:0;flex:1;font-size:14px;font-weight:600;line-height:1.3;color:var(--text)}
+#tour_card .tno{flex:none;font:400 10px/1 var(--mono);color:var(--faint)}
+#tour_card p{margin:0;font-size:12.5px;line-height:1.72;color:var(--dim)}
+#tour_card p b{font-weight:600;color:var(--text)}
+#tour_card p .tdo{display:block;margin-top:7px;font-size:11.5px;font-weight:600;color:var(--acc)}
+#tour_bar{height:3px;margin:11px 0 9px;border-radius:2px;background:var(--pane-4);overflow:hidden}
+#tour_fill{height:100%;width:0;border-radius:2px;transition:width .3s ease;
+  background:linear-gradient(90deg,var(--primary),var(--acc))}
+#tour_ft{display:flex;align-items:center;gap:8px}
+#tour_ft .sp{flex:1}
+#ver.can{cursor:help}
 </style>
 <body>
 
@@ -1523,12 +1573,43 @@ input[type=date]:focus::-webkit-datetime-edit{color:var(--text)}
   </section>
 </div></div>
 
+<!-- ===================================================== the guided tour, in place
+     The dark is one SVG rect painted through a mask with a single hole in it; the
+     ring is a second rect on top of the mask. Both are moved by attribute from the
+     animation loop, and the card is moved by transform, never by left/top.
+     data-notr: the card carries both languages itself instead of being translated
+     after the fact, because a tour that is half translated teaches the wrong thing. -->
+<svg id="tour_svg" aria-hidden="true">
+  <defs><mask id="tour_mask" maskUnits="userSpaceOnUse">
+    <rect x="0" y="0" width="100%" height="100%" fill="#fff"></rect>
+    <rect id="tour_hole" x="-900" y="-900" width="10" height="10" rx="9" fill="#000"></rect>
+  </mask></defs>
+  <rect id="tour_dim" x="0" y="0" width="100%" height="100%" mask="url(#tour_mask)"></rect>
+  <rect id="tour_ring" x="-900" y="-900" width="10" height="10" rx="9"></rect>
+</svg>
+<div id="tour_grab"></div>
+<div id="tour_card" data-notr role="dialog" aria-modal="true" aria-label="Guided tour">
+  <div id="tour_rail"></div>
+  <div class="ttop">
+    <span class="temo" id="tour_e" aria-hidden="true"></span>
+    <h4 id="tour_t"></h4>
+    <span class="tno" id="tour_no"></span>
+  </div>
+  <p id="tour_b"></p>
+  <div id="tour_bar"><div id="tour_fill"></div></div>
+  <div id="tour_ft">
+    <button class="btn txt sm" id="tour_x" onclick="tourEnd()"></button>
+    <span class="sp"></span>
+    <button class="btn sm" id="tour_p" onclick="tourStep(-1)"></button>
+    <button class="btn pri sm" id="tour_n" onclick="tourStep(1)"></button>
+  </div>
+</div>
 <script src="/i18n.js"></script>
 <script>
 let S = null, jobId = null, tRec = null, tJob = null, busy = false;
 /* Moved together with VERSION in app.py. The same number on both sides means the page
    and the server came out of the same copy of the code. */
-const UI_VERSION = '2.6.1';
+const UI_VERSION = '2.8.1';
 let staleBE = false;
 
 let lampAt = null, logEl = null, view = 'meet', cur = null, olm = null, att = [];
@@ -1592,6 +1673,10 @@ function setLangUI(l){
       attributes:true, attributeFilter:I18N_ATTR});
   } else if (lang !== 'en' && i18nObs){ i18nObs.disconnect(); i18nObs = null; }
   pushLang();
+  if (typeof verTip === 'function') verTip();
+  // the tour card carries both languages itself, so it is repainted rather than
+  // translated - and then re-placed, because the other language is a different size
+  if (typeof tourOn !== 'undefined' && tourOn){ tourPaint(); tourFit(); }
 }
 function flipLang(){ setLangUI(lang === 'en' ? 'zh' : 'en'); }
 /* The document in the third column has its own two languages, because a meeting can
@@ -4159,8 +4244,381 @@ addEventListener('message', e => {
   else if (d.mmt === 'flag') revAdd(d);
   else if (d.mmt === 'unflag') revDel(d.id);
 });
+
+/* ====================================================================== guided tour
+   One window at a time, and always at the thing it is talking about. Three decisions
+   gave it this shape.
+   Nothing is parked in the middle of the screen. Every step rings a real element -
+   the first one rings the logo, the last one rings the version stamp that brings the
+   tour back - so there is no card floating in front of the page with nothing behind
+   it, and no closing card either.
+   The plan is built from what this machine actually has. A fresh install has no
+   meeting in it, so the five session steps are not in the plan at all, the step
+   count and the dots say how many there really are, and a step whose target does
+   not measure is stepped over rather than ringing empty space.
+   And a step waits for its own content. The lamps, the session list and the
+   document all arrive after the first paint, so a step holds with the loading bar
+   running until its target is there - up to three seconds, then it is skipped. The
+   run on a brand-new install is the case this is for.
+   It runs itself once, after the page has finished loading, the first time this
+   machine opens it. After that the version stamp in the title bar brings it back -
+   out of the way, but findable. */
+/* Bumped only when the tour itself is rebuilt, not on every release: a machine that
+   has seen an older revision is walked through the new one once, and a machine that has
+   seen this one is left alone. */
+const TOUR_REV = 3;
+const TSEC = {zh: ['\u5f00\u59cb\u524d', '\u5f00\u4e00\u573a\u4f1a', '\u8f6c\u6210\u6587\u5b57', '\u7eaa\u8981'],
+              en: ['Before you start', 'Start a meeting', 'Transcribe', 'The minutes']};
+/* The order is the order you do things in, not the order they sit on the screen: what is
+   this -> is it ready -> fill it in once -> open a meeting -> record -> transcribe ->
+   confirm -> the document. The three title-bar steps come first because on a machine
+   nobody has used yet they are what you deal with first, not what you deal with last.
+   A step: c = which chapter it belongs to, sel = what it rings (a selector, a list of
+   them tried in order, or a function), need = the workspace state it belongs to, tab = a
+   stage tab it may borrow, emo + the two titles + the two bodies. A body may be a
+   function, which is how a step says something different on a machine that has nothing in
+   it yet. %N in a body is the real number of steps in this plan. */
+const TOUR = [
+  { c: 0, sel: '.logo', pad: 8, emo: '&#127908;',
+    zh: ['这就是纪要台',
+         '录一场会，它把<b>逐字稿</b>和<b>纪要</b>都写出来，而且全在这台机器上跑，没有上传到任何地方。' +
+         '<span class="tdo">▸ 这一趟 %N 步，按你进来之后的先后顺序走。→ 下一步，Esc 随时退出。</span>'],
+    en: ['This is Minutes Desk',
+         'Record a meeting and it writes the <b>transcript</b> and the <b>minutes</b>, all on this machine - nothing is uploaded anywhere.' +
+         '<span class="tdo">▸ %N steps, in the order you actually do them. → for the next one, Esc to leave.</span>'] },
+  { c: 0, sel: ['#rack', '#topst'], emo: '&#128678;',
+    zh: ['录之前先看这排灯',
+         '麦克风、模型、助手有没有就绪，一眼能看出来 —— 全绿才录得出东西。点任意一项看明细。'],
+    en: ['Read these lamps before you record',
+         'Microphone, model, assistant - whether each one is ready, at a glance. All green means it will actually record. Click any of them for the detail.'] },
+  { c: 0, sel: '#v_cfg', pad: 8, emo: '&#128295;',
+    zh: ['第一次进来，先把设置填一次',
+         '你的名字（纪要里署名用）、用哪个模型，还有<b>词表</b>。词表决定专有名词会不会被听错，花五分钟填一次，之后每一场都受益。'],
+    en: ['First time in, fill the settings once',
+         'Your own name (it signs the minutes), which model to use, and the <b>glossary</b>. The glossary decides whether your own jargon comes out spelled right - five minutes once, and every later meeting benefits.'] },
+  { c: 1, sel: '.col.ses', pad: 4, maxh: 300, emo: '&#128193;',
+    zh: ['左边是这台机器上的每一场会',
+         () => $('#slist') && $('#slist').children.length
+           ? '录过的会都留在这儿，点一场就打开它。最上面的<b>新录音</b>开始新的一场。'
+           : '现在这儿是空的 - 还没有录过会。按最上面的<b>新录音</b>，录完的第一场就会出现在这个位置，以后的每一场都排在它上面。'],
+    en: ['Every meeting on this machine is on the left',
+         () => $('#slist') && $('#slist').children.length
+           ? 'They all stay here; click one to open it, or <b>New recording</b> at the top to start another.'
+           : 'It is empty right now - nothing has been recorded yet. Press <b>New recording</b> at the top, and your first meeting appears right here, with every later one stacked above it.'] },
+  { c: 1, sel: '#recidle .fitem', need: 'prep', emo: '&#128221;',
+    zh: ['会议名称，或者直接从 Outlook 载入',
+         '点<b>从 Outlook 载入</b>，挑今天日历里的那场会，名称和与会人一起填好，不用手打。'],
+    en: ['Name it, or load it from Outlook',
+         'Press <b>Load from Outlook</b>, pick the meeting off your calendar, and the name and the attendees are filled in for you.'] },
+  { c: 1, sel: '#r_others', need: 'prep', emo: '&#128101;',
+    zh: ['与会人这份名单，比看起来重要',
+         '转写完要靠它认出谁在说话。名单错了，逐字稿上的名字就跟着错。录完还能改。'],
+    en: ['The attendee list matters more than it looks',
+         'It is the list of candidate names used to work out who is speaking. Wrong list, wrong names on the transcript. You can still correct it after recording.'] },
+  { c: 1, sel: '#recgo', need: 'prep', emo: '&#128308;',
+    zh: ['按下就开始录',
+         '别人的声音和你的麦克风分成两轨，各自转写，所以才分得清谁在说。' +
+         '<span class="tdo">▸ 录的时候这一块变成计时器，可以随手打标记。</span>'],
+    en: ['Press this and it records',
+         'The far end and your own microphone go to two separate tracks and are transcribed separately, which is what makes speakers separable.' +
+         '<span class="tdo">▸ While it runs this area becomes a timer you can drop bookmarks on.</span>'] },
+  { c: 2, sel: '#res_stp', need: 'ses', emo: '&#129517;',
+    zh: ['录完之后，一场会分四步走',
+         '录音、语音识别、校对确认、纪要。每一步自己报状态，所以这排既是导航，也是进度。'],
+    en: ['Once it is recorded, a meeting moves through four stages',
+         'Recording, transcription, the confirm desk, the minutes. Each stage reports its own state, so this strip is the navigation and the progress at the same time.'] },
+  { c: 2, sel: '#ros_wrap', need: 'ses', tab: 1, pad: 4, maxh: 260, emo: '&#9989;',
+    zh: ['识别之前，先把人勾对',
+         '后来没到的取消勾选，漏的敲进去，然后按<b>确认名单，开始识别</b>。这一步错了，后面所有名字都跟着错。'],
+    en: ['Tick the right people before transcribing',
+         'Untick anyone who did not turn up, type in anyone missing, then press <b>Confirm the list and start</b>. Get this wrong and every name after it is wrong.'] },
+  { c: 2, sel: '#anago', need: 'ses', emo: '&#9889;',
+    zh: ['这颗按钮就是开始跑',
+         '语音识别比较吃 CPU。跑的时候可以切走做别的，回来进度还在这儿。'],
+    en: ['This button is what starts the run',
+         'Transcription is the CPU-heavy step. You can switch away while it runs; the progress is still here when you come back.'] },
+  { c: 2, sel: '#c_qwrap', need: 'ses', tab: 2, pad: 4, maxh: 260, emo: '&#10067;',
+    zh: ['跑完先过校对确认',
+         '听不准的词、拿不准的说法，都在这儿点一下确认，而不是直接写进纪要。'],
+    en: ['Then the confirm desk, before the minutes',
+         'Words it heard poorly and places it is unsure about are put here for one click each, instead of going straight into the minutes.'] },
+  /* Over 1400px the document is the third column; under that it moves into the fourth
+     stage tab and the column is left 0 wide. One step either way, so it works out which
+     of the two it is and whether it has to borrow a tab to show it. */
+  { c: 3, sel: () => tourBig('#coldoc') ? '#coldoc' : '#pn_doc', need: 'ses',
+    tab: () => tourBig('#coldoc') ? null : 3, pad: 4, maxh: 320, emo: '&#128196;',
+    zh: ['最后这张纸就是成品',
+         '纪要正文、中文版、逐字稿都在上面。右上角可以直接改正文，也能在新窗口打开。'],
+    en: ['And this sheet at the end is the finished thing',
+         'The body of the minutes, the Chinese version and the transcript are all on it. Top right edits the body, or opens it in its own window.'] },
+  { c: 3, sel: '#ver', pad: 8, emo: '&#127937;',
+    zh: ['就这些 - 这个版本号就是回来的路',
+         '想再走一遍，点它。数字本身是<b>这一份代码的版本</b>，报问题的时候带上它。'],
+    en: ['That is all of it - and this stamp is the way back',
+         'Click it to walk through again. The number itself is <b>the version of this build</b>; quote it when you report anything.'] },
+];
+const TNEED = {
+  prep: () => { const e = $('#prep'); return !!e && !e.hidden; },
+  ses:  () => { const e = $('#res');  return !!e && !e.hidden; },
+};
+let tourPlan = [], tourI = 0, tourOn = false, tourWas = null, tourSeq = 0, tourSkips = 0;
+let tRaf = 0, tFrames = 0, tSnap = true, tScr = null, tScrY = null;
+let tCX = 0, tCY = 0, tCW = 366, tCH = 210;
+const tHole = {x: 0, y: 0, w: 8, h: 8};
+/* a step may work out its own target and its own tab, because one of them lives in two
+   different places depending on how wide the window is */
+const tsel = s => typeof s.sel === 'function' ? s.sel() : s.sel;
+const ttab = s => typeof s.tab === 'function' ? s.tab() : s.tab;
+const tcl = (v, lo, hi) => Math.max(lo, Math.min(Math.max(lo, hi), v));
+/* A stage pane carries "hidden" for the three tabs you are not looking at, which is not
+   the same thing as a control that is not there - so panes are stepped over. */
+function tourVisEl(e){
+  if (!e) return false;
+  for (let n = e; n && n !== document.body; n = n.parentElement){
+    if (n.classList && n.classList.contains('pn')) continue;
+    if (n.hasAttribute && n.hasAttribute('hidden')) return false;
+    if (getComputedStyle(n).display === 'none') return false;
+  }
+  return true;
+}
+function tourFind(sel){
+  for (const q of [].concat(sel || [])){ const e = $(q); if (tourVisEl(e)) return e; }
+  return null;
+}
+/* displayed is not the same as there: under 1400px the document column is still a flex
+   child, it is just 0 wide, because the document itself has moved into the fourth stage
+   tab. A step may only ring something that measures. */
+function tourBig(sel){
+  const e = tourFind(sel); if (!e) return null;
+  const b = e.getBoundingClientRect();
+  return (b.width >= 8 && b.height >= 8) ? e : null;
+}
+/* poll, not a one-shot check: the thing a step points at may still be on its way */
+function tourWait(fn, ms){
+  return new Promise(res => {
+    if (fn()) return res(true);
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if (fn()){ clearInterval(iv); res(true); }
+      else if (Date.now() - t0 > ms){ clearInterval(iv); res(false); }
+    }, 110);
+  });
+}
+function tourBuild(){
+  tourPlan = TOUR.filter(s => {
+    if (s.need && !(TNEED[s.need] && TNEED[s.need]())) return false;
+    const q = tsel(s);
+    if (!q) return false;
+    // a step that borrows a tab cannot be measured from here; the tab it wants is
+    // hidden right now, so its structure is all there is to go on
+    return ttab(s) != null ? !!tourFind(q) : !!tourBig(q);
+  });
+}
+/* ---- geometry: the hole, clipped to the window, and the card beside it ---- */
+function tRect(el, s){
+  const b = el.getBoundingClientRect(), p = s.pad === undefined ? 6 : s.pad;
+  const vw = innerWidth, vh = innerHeight;
+  let x = b.left - p, y = b.top - p, w = b.width + p * 2;
+  let h = (s.maxh && b.height > s.maxh ? s.maxh : b.height) + p * 2;
+  if (x < 3){ w += x - 3; x = 3; }
+  if (x + w > vw - 3) w = vw - 3 - x;
+  if (y < 3){ h += y - 3; y = 3; }
+  if (y + h > vh - 3) h = vh - 3 - y;
+  return {x: x, y: y, w: Math.max(8, w), h: Math.max(8, h)};
+}
+function tWant(r){
+  const vw = innerWidth, vh = innerHeight, g = 14;
+  const mid = tcl(r.x + r.w / 2 - tCW / 2, 8, vw - tCW - 8);
+  if (vh - (r.y + r.h) - g >= tCH) return {x: mid, y: r.y + r.h + g};
+  if (r.y - g >= tCH)              return {x: mid, y: r.y - g - tCH};
+  const ctr = tcl(r.y + r.h / 2 - tCH / 2, 8, vh - tCH - 8);
+  if (vw - (r.x + r.w) - g >= tCW) return {x: r.x + r.w + g, y: ctr};
+  if (r.x - g >= tCW)              return {x: r.x - g - tCW, y: ctr};
+  // the target fills the window: sit at the bottom of it, not over the middle of it
+  return {x: tcl((vw - tCW) / 2, 8, vw - tCW - 8), y: tcl(vh - tCH - 14, 8, vh - tCH - 8)};
+}
+/* The window itself never scrolls here; each column carries its own scrollbar. First
+   match up the chain wins - a scrollable ancestor is used, a fixed or sticky one means
+   this thing does not scroll at all. */
+function tScroller(el){
+  for (let n = el.parentElement; n && n !== document.body; n = n.parentElement){
+    const cs = getComputedStyle(n), o = cs.overflowY;
+    if ((o === 'auto' || o === 'scroll') && n.scrollHeight > n.clientHeight + 2) return n;
+    if (cs.position === 'fixed' || cs.position === 'sticky') return null;
+  }
+  return null;
+}
+function tPlanScroll(el){
+  tScr = null; tScrY = null;
+  const s = tScroller(el); if (!s) return;
+  const cr = s.getBoundingClientRect(), er = el.getBoundingClientRect();
+  const top = er.top - cr.top, vis = s.clientHeight;
+  if (top >= 8 && top + Math.min(er.height, vis) <= vis - 8) return;
+  const max = Math.max(0, s.scrollHeight - s.clientHeight);
+  const y = Math.max(0, Math.min(max, s.scrollTop + top - vis * 0.3));
+  if (Math.abs(y - s.scrollTop) < 3) return;
+  tScr = s; tScrY = y;
+}
+/* ---- one loop drives the scroll, the hole and the card ---- */
+function tPlace(now){
+  const s = tourPlan[tourI]; if (!s) return;
+  const el = tourFind(tsel(s)); if (!el) return;
+  if (tScr && tScrY !== null){
+    const d = tScrY - tScr.scrollTop;
+    if (now || Math.abs(d) < 1.5){ tScr.scrollTop = tScrY; tScr = null; tScrY = null; }
+    else tScr.scrollTop += d * 0.2;
+  }
+  const r = tRect(el, s), f = (now || tSnap) ? 1 : 0.22;
+  tHole.x += (r.x - tHole.x) * f; tHole.y += (r.y - tHole.y) * f;
+  tHole.w += (r.w - tHole.w) * f; tHole.h += (r.h - tHole.h) * f;
+  const x = Math.round(tHole.x), y = Math.round(tHole.y);
+  const w = Math.max(2, Math.round(tHole.w)), h = Math.max(2, Math.round(tHole.h));
+  for (const q of ['#tour_hole', '#tour_ring']){
+    const n = $(q); if (!n) continue;
+    n.setAttribute('x', x); n.setAttribute('y', y);
+    n.setAttribute('width', w); n.setAttribute('height', h);
+  }
+  const p = tWant(tHole);
+  tCX += (p.x - tCX) * f; tCY += (p.y - tCY) * f;
+  $('#tour_card').style.transform =
+    'translate3d(' + Math.round(tCX) + 'px,' + Math.round(tCY) + 'px,0)';
+  tSnap = false;
+}
+function tFrame(){
+  if (!tourOn){ tRaf = 0; return; }
+  tFrames++; tPlace(false);
+  tRaf = requestAnimationFrame(tFrame);
+}
+/* ---- the card ---- */
+function tourRail(){
+  const en = lang === 'en', names = en ? TSEC.en : TSEC.zh, chs = [];
+  tourPlan.forEach(s => { if (chs.indexOf(s.c) < 0) chs.push(s.c); });
+  chs.sort((a, b) => a - b);
+  const now = tourPlan[tourI].c, at = chs.indexOf(now);
+  let h = '<b class="tmk">MD</b>';
+  chs.forEach((c, i) => {
+    h += '<button class="tdot ' + (c === now ? 'now' : at > i ? 'done' : '') +
+         '" onclick="tourJump(' + c + ')" title="' + names[c] + '">' + (i + 1) + '</button>';
+  });
+  $('#tour_rail').innerHTML = h + '<span class="tlbl">' + names[now] + '</span>';
+}
+function tourPaint(){
+  const s = tourPlan[tourI]; if (!s) return;
+  const L = (lang === 'en' && s.en) ? s.en : s.zh;
+  const last = tourI === tourPlan.length - 1;
+  tourRail();
+  $('#tour_e').innerHTML = s.emo || '';
+  $('#tour_t').textContent = L[0];
+  $('#tour_b').innerHTML = String(typeof L[1] === 'function' ? L[1]() : L[1])
+    .split('%N').join(tourPlan.length);
+  $('#tour_no').textContent = (tourI + 1) + '/' + tourPlan.length;
+  $('#tour_fill').style.width = Math.round((tourI + 1) / tourPlan.length * 100) + '%';
+  $('#tour_x').textContent = lang === 'en' ? 'Skip' : '跳过';
+  $('#tour_p').textContent = lang === 'en' ? 'Back' : '上一步';
+  $('#tour_n').textContent = last ? (lang === 'en' ? 'Got it' : '知道了')
+                                  : (lang === 'en' ? 'Next' : '下一步');
+  $('#tour_p').hidden = tourI === 0;
+  $('#tour_x').hidden = last;
+}
+function tourRender(d){
+  const my = ++tourSeq, s = tourPlan[tourI], c = $('#tour_card'), tb = ttab(s);
+  if (tb != null && TNEED.ses()){ try { tabGo(tb); } catch(e){} }
+  tourPaint();
+  c.classList.add('busy');
+  // hold, with the bar running, for content that has not arrived yet - and only give
+  // up on it after three seconds, rather than ringing an empty spot straight away
+  tourWait(() => !!tourBig(tsel(s)), 3000).then(ok => {
+    if (my !== tourSeq || !tourOn) return;
+    c.classList.remove('busy');
+    if (!ok){ tourOver(d); return; }
+    tourSkips = 0;
+    tCW = c.offsetWidth || 366; tCH = c.offsetHeight || 210;
+    tPlanScroll(tourFind(tsel(s)));
+    if (!tRaf) tRaf = requestAnimationFrame(tFrame);
+    // a window nobody is looking at has its frames paused; place it anyway
+    const f0 = tFrames;
+    setTimeout(() => { if (tourOn && tFrames === f0) tPlace(true); }, 320);
+  });
+}
+/* a target that never turned up: carry on in the direction of travel */
+function tourOver(d){
+  if (++tourSkips > tourPlan.length + 2){ tourEnd(); return; }
+  const n = tourI + (d === -1 ? -1 : 1);
+  if (n < 0 || n >= tourPlan.length){ tourEnd(); return; }
+  tourI = n; tourRender(d);
+}
+function tourGo(i, d){
+  if (!tourPlan.length) return;
+  if (i >= tourPlan.length){ tourEnd(); return; }
+  tourI = Math.max(0, i); tourRender(d >= 0 ? 1 : -1);
+}
+function tourStep(d){ tourGo(tourI + d, d); }
+function tourJump(c){
+  if (!tourOn) return;
+  for (let i = 0; i < tourPlan.length; i++){
+    if (tourPlan[i].c === c){ tourSkips = 0; tourGo(i, i >= tourI ? 1 : -1); return; }
+  }
+}
+function tourKey(e){
+  if (!tourOn) return;
+  if (e.key === 'Escape'){ e.preventDefault(); tourEnd(); }
+  else if (e.key === 'ArrowRight' || e.key === 'Enter'){ e.preventDefault(); tourStep(1); }
+  else if (e.key === 'ArrowLeft'){ e.preventDefault(); tourStep(-1); }
+}
+function tourFit(){
+  if (!tourOn) return;
+  const c = $('#tour_card');
+  tCW = c.offsetWidth || 366; tCH = c.offsetHeight || 210;
+  tPlace(true);
+}
+function tourStart(){
+  if (tourOn) return;
+  tourBuild();
+  if (!tourPlan.length) return;
+  tourOn = true; tourI = 0; tourSkips = 0; tFrames = 0; tSnap = true;
+  tScr = null; tScrY = null;
+  tourWas = {t: tab, auto: tabAuto};
+  const c = $('#tour_card');
+  c.style.display = 'block';
+  $('#tour_svg').style.display = 'block';
+  $('#tour_grab').style.display = 'block';
+  tourPaint();                                    // measure the real card, not a guess
+  tCW = c.offsetWidth || 366; tCH = c.offsetHeight || 210;
+  const el = tourFind(tsel(tourPlan[0]));
+  const r = el ? tRect(el, tourPlan[0])
+              : {x: innerWidth / 2, y: innerHeight / 2, w: 8, h: 8};
+  tHole.x = r.x; tHole.y = r.y; tHole.w = r.w; tHole.h = r.h;
+  const p = tWant(tHole); tCX = p.x; tCY = p.y;
+  addEventListener('keydown', tourKey, true);
+  addEventListener('resize', tourFit);
+  tourRender(1);
+}
+function tourEnd(){
+  tourOn = false; tourSeq++;
+  if (tRaf){ cancelAnimationFrame(tRaf); tRaf = 0; }
+  removeEventListener('keydown', tourKey, true);
+  removeEventListener('resize', tourFit);
+  const c = $('#tour_card');
+  c.classList.remove('busy');
+  c.style.display = 'none';
+  c.style.transform = 'translate3d(-9999px,-9999px,0)';
+  $('#tour_svg').style.display = 'none';
+  $('#tour_grab').style.display = 'none';
+  tScr = null; tScrY = null;
+  // the tour borrows the stage tabs to show two of its steps; give the view back
+  if (tourWas){ try { tabGo(tourWas.t); tabAuto = tourWas.auto; drawCur(); } catch(e){} }
+  tourWas = null;
+  try { localStorage.setItem('mmt.tour', String(TOUR_REV)); } catch(e){}
+}
+function verTip(){
+  const v = $('#ver');
+  if (v) v.title = lang === 'en' ? 'Click for the guided tour' : '点一下看使用指引';
+}
 setTheme(document.documentElement.dataset.theme || 'dark');
 $('#ver').textContent = 'v' + UI_VERSION;   // one literal, put where it can be read off
+$('#ver').classList.add('can');
+$('#ver').onclick = () => tourStart();
+verTip();
 gutInit();
 placeDoc();
 try { setLangUI(localStorage.getItem('mmt.uilang') || 'zh'); } catch(e){}
@@ -4168,6 +4626,19 @@ try { setLangUI(localStorage.getItem('mmt.uilang') || 'zh'); } catch(e){}
   await refresh(1);
   await engLoad(0);
   if (!S.doctor.tested_at) await levels();
+  // First open on this machine: walk them through it once, unasked - but not into a
+  // half-loaded page. The lamps are drawn from a self-check that lands after the first
+  // paint, so the tour waits for the rack to exist and for nothing else to be running,
+  // and it never waits forever.
+  let seen = String(TOUR_REV);
+  try { seen = localStorage.getItem('mmt.tour'); } catch(e){}
+  if ((Number(seen) || 0) < TOUR_REV){
+    await tourWait(() => {
+      const r = $('#rack');
+      return !busy && !!r && (r.children.length > 0 || getComputedStyle(r).display === 'none');
+    }, 9000);
+    if (!$('#pop').classList.contains('on')) setTimeout(tourStart, 450);
+  }
 })();
 beatEvery(3000);
 /* A background tab has its timers throttled hard, so it can sit on the old version for a
